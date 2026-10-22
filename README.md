@@ -33,11 +33,12 @@ npm test            # analyzer tests
 npx expo start      # then scan the QR code with the Expo Go app on your phone
 ```
 
-### Installable APK (no computer needed afterwards)
+### Installable APK (from your phone)
 
-```bash
-npx eas-cli@latest login     # free Expo account
-npm run build:apk            # builds in the cloud, gives a download link for the .apk
-```
+GitHub builds the APK automatically on every push (`.github/workflows/android-apk.yml`):
 
-Open the link on your phone and install. You'll need to allow installing apps from unknown sources.
+1. Open the repository on GitHub → **Actions** → the newest **Android APK** run with a green tick.
+2. Under **Artifacts**, tap **FODMAP-tutka-apk** to download a zip.
+3. Open the zip in the Files app, tap the `.apk` and allow installing from unknown sources.
+
+New versions install over the old one and keep your history.
