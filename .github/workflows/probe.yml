@@ -1,0 +1,36 @@
+# Väliaikainen: selvittää tuotetietolähteiden rakenteen. Poistetaan tutkimuksen jälkeen.
+name: Probe data sources
+on:
+  push:
+    paths: ['.github/workflows/probe.yml']
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - name: S-kaupat search page
+        run: |
+          UA='Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130 Mobile Safari/537.36'
+          curl -sL -A "$UA" 'https://www.s-kaupat.fi/hakutulos?queryString=laktoositon%20jogurtti' -o search.html -w 'status %{http_code} size %{size_download}\n'
+          grep -o '/tuote/[^"?]*' search.html | sort -u | head -5
+          grep -o '__NEXT_DATA__\|__APOLLO_STATE__\|graphql[^"]*' search.html | sort | uniq -c | head
+          P=$(grep -o '/tuote/[^"?]*' search.html | head -1); echo "product: $P"
+          curl -sL -A "$UA" "https://www.s-kaupat.fi$P" -o product.html -w 'status %{http_code} size %{size_download}\n'
+          grep -o -i '"[a-zA-Z]*ingredient[a-zA-Z]*":[^,]\{0,300\}' product.html | head -5
+          grep -o -i '"ean":"[0-9]*"' product.html | head -3
+          grep -o -i '"[a-zA-Z]*\(label\|mark\|symbol\|claim\)[a-zA-Z]*":[^,]\{0,200\}' product.html | sort -u | head -15
+          grep -o -i '.\{150\}sydänmerk.\{150\}' product.html | head -3
+          grep -o -i 'https://[a-z.-]*api[a-z.-]*s-kaupat[^"]*' product.html search.html | sort -u | head
+      - name: S-kaupat graphql endpoint
+        run: |
+          curl -s -X POST https://api.s-kaupat.fi/ -H 'content-type: application/json' -d '{"query":"{ __typename }"}' -w '\nstatus %{http_code}\n' | head -c 600
+      - name: Open Food Facts Finland coverage and heart symbol tags
+        run: |
+          UA='FODMAP-tutka-probe/1.0'
+          for q in 'countries_tags=en:finland' 'countries_tags=en:finland&states_tags=en:ingredients-completed' 'labels_tags=fi:sydanmerkki' 'labels_tags=en:finnish-heart-symbol' 'labels_tags=en:heart-symbol' 'labels_tags=en:sydanmerkki'; do
+            echo "$q -> $(curl -s -A "$UA" "https://world.openfoodfacts.org/api/v2/search?$q&fields=code&page_size=1" | grep -o '"count":[0-9]*')"
+          done
+          curl -s -A "$UA" 'https://world.openfoodfacts.org/api/v2/search?countries_tags=en:finland&fields=labels_tags&page_size=200' | grep -o -i '"[a-z]*:[a-z-]*\(syd\|heart\)[a-z-]*"' | sort | uniq -c
+      - name: Sydanmerkki site
+        run: |
+          curl -sL 'https://www.sydanmerkki.fi/' -o s.html -w 'status %{http_code} size %{size_download}\n'
+          grep -o -i 'href="[^"]*tuot[^"]*"' s.html | sort -u | head -15
