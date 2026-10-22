@@ -26,10 +26,21 @@ const FIELDS = [
 
 export class NotFoundError extends Error {}
 
+/** Kaupassa yhteys voi olla heikko – ei jäädä odottamaan loputtomiin. */
+const TIMEOUT_MS = 15000;
+
 export async function fetchProduct(barcode: string): Promise<Product> {
-  const res = await fetch(`https://world.openfoodfacts.org/api/v2/product/${encodeURIComponent(barcode)}.json?fields=${FIELDS}`, {
-    headers: { 'User-Agent': 'FODMAP-tutka/1.0 (henkilokohtainen kaytto)' },
-  });
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
+  let res: Response;
+  try {
+    res = await fetch(`https://world.openfoodfacts.org/api/v2/product/${encodeURIComponent(barcode)}.json?fields=${FIELDS}`, {
+      headers: { 'User-Agent': 'FODMAP-tutka/1.0 (henkilokohtainen kaytto)' },
+      signal: controller.signal,
+    });
+  } finally {
+    clearTimeout(timer);
+  }
   if (res.status === 404) throw new NotFoundError(barcode);
   if (!res.ok) throw new Error(`Open Food Facts vastasi ${res.status}`);
   const json = await res.json();

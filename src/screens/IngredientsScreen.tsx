@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { KeyboardAvoidingView, ScrollView, StyleSheet, Text, TextInput } from 'react-native';
+import { ScrollView, StyleSheet, Text, TextInput } from 'react-native';
 
 import { Button } from '../components/Button';
 import { colors } from '../theme';
@@ -18,37 +18,35 @@ export function IngredientsScreen({ barcode, initialName = '', initialText = '',
   const [text, setText] = useState(initialText);
 
   return (
-    <KeyboardAvoidingView style={{ flex: 1 }} behavior="height">
-      <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
-        <Text style={styles.title}>{barcode ? 'Tuotetta ei löytynyt tietokannasta' : 'Tarkista ainesosaluettelo'}</Text>
-        <Text style={styles.body}>
-          {barcode
-            ? `Viivakoodi ${barcode}. Kirjoita ainesosat pakkauksesta – ne tallennetaan, joten seuraavalla skannauksella tulos tulee heti.`
-            : 'Kirjoita tai liitä ainesosaluettelo, esim. "vesi, vehnäjauho, sokeri, suola, sipulijauhe".'}
-        </Text>
-        {barcode && (
-          <TextInput
-            value={name}
-            onChangeText={setName}
-            placeholder="Tuotteen nimi"
-            style={styles.input}
-            placeholderTextColor={colors.muted}
-          />
-        )}
+    <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
+      <Text style={styles.title}>{barcode ? 'Tuotetta ei löytynyt tietokannasta' : 'Tarkista ainesosaluettelo'}</Text>
+      <Text style={styles.body}>
+        {barcode
+          ? `Viivakoodi ${barcode}. Kirjoita ainesosat pakkauksesta – ne tallennetaan, joten seuraavalla skannauksella tulos tulee heti.`
+          : 'Kirjoita tai liitä ainesosaluettelo, esim. "vesi, vehnäjauho, sokeri, suola, sipulijauhe".'}
+      </Text>
+      {barcode && (
         <TextInput
-          value={text}
-          onChangeText={setText}
-          placeholder="Ainesosat…"
-          multiline
-          textAlignVertical="top"
-          autoCapitalize="none"
-          style={[styles.input, styles.textArea]}
+          value={name}
+          onChangeText={setName}
+          placeholder="Tuotteen nimi"
+          style={styles.input}
           placeholderTextColor={colors.muted}
         />
-        <Button label="Tarkista" onPress={() => onSubmit(name, text)} disabled={text.trim().length === 0} />
-        {onCancel && <Button label="Peruuta" variant="secondary" onPress={onCancel} />}
-      </ScrollView>
-    </KeyboardAvoidingView>
+      )}
+      <TextInput
+        value={text}
+        onChangeText={setText}
+        placeholder="Ainesosat…"
+        multiline
+        textAlignVertical="top"
+        autoCapitalize="none"
+        style={[styles.input, styles.textArea]}
+        placeholderTextColor={colors.muted}
+      />
+      <Button label="Tarkista" onPress={() => onSubmit(name, text)} disabled={text.trim().length === 0} />
+      {onCancel && <Button label="Peruuta" variant="secondary" onPress={onCancel} />}
+  </ScrollView>
   );
 }
 

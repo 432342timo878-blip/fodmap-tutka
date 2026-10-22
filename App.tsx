@@ -1,7 +1,7 @@
 import { StatusBar } from 'expo-status-bar';
 import { ReactNode, useEffect, useMemo, useState } from 'react';
 import { Alert, BackHandler, Pressable, StyleSheet, Text, View } from 'react-native';
-import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { analyzeIngredients } from './src/analysis/analyze';
 import { Product } from './src/api/openFoodFacts';
@@ -24,6 +24,7 @@ import {
   Settings,
 } from './src/storage';
 import { colors } from './src/theme';
+import { useKeyboardHeight } from './src/useKeyboardHeight';
 
 type Tab = 'scan' | 'history' | 'check' | 'settings';
 
@@ -39,6 +40,17 @@ const TABS: { id: Tab; label: string; icon: string }[] = [
 ];
 
 export default function App() {
+  return (
+    <SafeAreaProvider>
+      <Main />
+    </SafeAreaProvider>
+  );
+}
+
+function Main() {
+  const insets = useSafeAreaInsets();
+  const keyboardHeight = useKeyboardHeight();
+  const [launchRequest, setLaunchRequest] = useState(0);
   const [tab, setTab] = useState<Tab>('scan');
   const [overlay, setOverlay] = useState<Overlay | null>(null);
   const [busy, setBusy] = useState(false);
@@ -135,7 +147,10 @@ export default function App() {
             ? () => setOverlay({ kind: 'ingredients', barcode: product.barcode, name: product.name, text: product.ingredientsText, back: overlay.back })
             : undefined
         }
-        onDone={closeOverlay}
+        onDone={() => {
+          closeOverlay();
+          if (overlay.back === 'scan') setLaunchRequest((n) => n + 1);
+        }}
         doneLabel={overlay.back === 'scan' ? 'Skannaa seuraava' : 'Takaisin'}
       />
     );
@@ -151,7 +166,7 @@ export default function App() {
       />
     );
   } else if (tab === 'scan') {
-    content = <ScanScreen busy={busy} onBarcode={handleBarcode} />;
+    content = <ScanScreen busy={busy} onBarcode={handleBarcode} launchRequest={launchRequest} />;
   } else if (tab === 'history') {
     content = <HistoryScreen overrides={overrides} onOpen={openHistoryItem} />;
   } else if (tab === 'check') {
@@ -160,31 +175,32 @@ export default function App() {
     content = <SettingsScreen settings={settings} onChange={changeSettings} />;
   }
 
+  const keyboardOpen = keyboardHeight > 0;
   return (
-    <SafeAreaProvider>
-      <SafeAreaView style={styles.root} edges={['top', 'bottom']}>
-        <StatusBar style="dark" />
-        <View style={styles.header}>
-          <Text style={styles.headerTitle}>FODMAP-tutka</Text>
+    // Näppäimistön korkeus ei sisällä navigointipalkkia, joten alareunan tila lisätään aina.
+    <View style={[styles.root, { paddingBottom: insets.bottom + keyboardHeight }]}>
+      <StatusBar style="light" />
+      <View style={[styles.header, { paddingTop: insets.top + 12 }]}>
+        <Text style={styles.headerTitle}>FODMAP-tutka</Text>
+      </View>
+      <View style={styles.content}>{content}</View>
+      {!overlay && !keyboardOpen && (
+        <View style={styles.tabBar}>
+          {TABS.map((t) => (
+            <Pressable key={t.id} style={styles.tab} onPress={() => setTab(t.id)}>
+              <Text style={styles.tabIcon}>{t.icon}</Text>
+              <Text style={[styles.tabLabel, tab === t.id && styles.tabLabelActive]}>{t.label}</Text>
+            </Pressable>
+          ))}
         </View>
-        <View style={{ flex: 1 }}>{content}</View>
-        {!overlay && (
-          <View style={styles.tabBar}>
-            {TABS.map((t) => (
-              <Pressable key={t.id} style={styles.tab} onPress={() => setTab(t.id)}>
-                <Text style={styles.tabIcon}>{t.icon}</Text>
-                <Text style={[styles.tabLabel, tab === t.id && styles.tabLabelActive]}>{t.label}</Text>
-              </Pressable>
-            ))}
-          </View>
-        )}
-      </SafeAreaView>
-    </SafeAreaProvider>
+      )}
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: colors.background },
+  root: { flex: 1, backgroundColor: colors.surface },
+  content: { flex: 1, backgroundColor: colors.background },
   header: { paddingHorizontal: 16, paddingVertical: 12, backgroundColor: colors.primary },
   headerTitle: { fontSize: 20, fontWeight: '800', color: colors.primaryText },
   tabBar: { flexDirection: 'row', borderTopWidth: 1, borderTopColor: colors.border, backgroundColor: colors.surface },
