@@ -49,7 +49,12 @@ export async function lookupProduct(barcode: string): Promise<LookupResult> {
     return { product: cached };
   }
   try {
-    const product = await fetchProduct(barcode);
+    const fetched = await fetchProduct(barcode);
+    // Aiemmin S-kaupoista haettu luettelo on parempi kuin Open Food Factsin tyhjä.
+    const product: Product =
+      !fetched.ingredientsText && cached?.ingredientsText
+        ? { ...cached, fetchedAt: Date.now() }
+        : { ...fetched, lactoseFree: cached?.lactoseFree };
     await writeJson(KEYS.product(barcode), product);
     return { product };
   } catch (err) {
@@ -63,15 +68,22 @@ export async function getCachedProduct(barcode: string): Promise<Product | null>
   return readJson<Product | null>(KEYS.product(barcode), null);
 }
 
+export async function saveProduct(product: Product): Promise<void> {
+  await writeJson(KEYS.product(product.barcode), product);
+}
+
+/** Tallentaa käyttäjän kirjoittaman tai kuvaaman ainesosaluettelon. Aiemmat tiedot (kuva, merkki) säilyvät. */
 export async function saveManualProduct(barcode: string, name: string, ingredientsText: string): Promise<Product> {
+  const previous = await getCachedProduct(barcode);
   const product: Product = {
+    ...previous,
     barcode,
-    name: name.trim() || 'Oma tuote',
+    name: name.trim() || previous?.name || 'Oma tuote',
     ingredientsText,
     source: 'manual',
     fetchedAt: Date.now(),
   };
-  await writeJson(KEYS.product(barcode), product);
+  await saveProduct(product);
   return product;
 }
 

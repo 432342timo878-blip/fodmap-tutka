@@ -7,8 +7,14 @@ export interface Product {
   brand?: string;
   imageUrl?: string;
   ingredientsText?: string;
-  /** Mistä ainesosaluettelo on: Open Food Facts vai käyttäjän itse kirjoittama. */
-  source: 'off' | 'manual';
+  /** Open Food Facts -merkinnät, esim. "en:lactose-free". */
+  labels?: string[];
+  /** S-kaupat-sivulla näkyi Sydänmerkki. */
+  heartSymbol?: boolean;
+  /** Käyttäjä on vahvistanut pakkauksesta, että tuote on laktoositon. */
+  lactoseFree?: boolean;
+  /** Mistä ainesosaluettelo on: Open Food Facts, S-kaupat vai käyttäjän kirjoittama/kuvaama. */
+  source: 'off' | 'skaupat' | 'manual';
   fetchedAt: number;
 }
 
@@ -18,6 +24,7 @@ const FIELDS = [
   'generic_name_fi',
   'brands',
   'image_front_small_url',
+  'labels_tags',
   'ingredients_text_fi',
   'ingredients_text_sv',
   'ingredients_text_en',
@@ -55,6 +62,7 @@ export async function fetchProduct(barcode: string): Promise<Product> {
     imageUrl: pick(p.image_front_small_url),
     // Suomenkielinen luettelo ensin; ruotsi ja englanti varalla.
     ingredientsText: pick(p.ingredients_text_fi, p.ingredients_text_sv, p.ingredients_text_en, p.ingredients_text),
+    labels: Array.isArray(p.labels_tags) ? p.labels_tags : undefined,
     source: 'off',
     fetchedAt: Date.now(),
   };

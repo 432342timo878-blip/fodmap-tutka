@@ -30,6 +30,13 @@
           "barcodeScannerEnabled": true
         }
       ],
+      [
+        "expo-image-picker",
+        {
+          "microphonePermission": false,
+          "photosPermission": false
+        }
+      ],
       "./plugins/withScannerFixes"
     ]
   }

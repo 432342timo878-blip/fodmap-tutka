@@ -4,11 +4,14 @@ import { Alert, BackHandler, Pressable, StyleSheet, Text, View } from 'react-nat
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { analyzeIngredients } from './src/analysis/analyze';
+import { createHeartSymbolMatcher } from './src/analysis/heartSymbol';
 import { Product } from './src/api/openFoodFacts';
+import { SKaupatFetcher, SKaupatMessage, SKaupatProduct } from './src/api/sKaupat';
 import { ResultView } from './src/components/ResultView';
 import { HistoryScreen } from './src/screens/HistoryScreen';
 import { IngredientsScreen } from './src/screens/IngredientsScreen';
 import { ScanScreen } from './src/screens/ScanScreen';
+import { SKaupatBrowserScreen } from './src/screens/SKaupatBrowserScreen';
 import { SettingsScreen } from './src/screens/SettingsScreen';
 import {
   addToHistory,
@@ -19,18 +22,40 @@ import {
   lookupProduct,
   Override,
   saveManualProduct,
+  saveProduct,
   saveSettings,
   setOverride,
   Settings,
 } from './src/storage';
 import { colors } from './src/theme';
 import { useKeyboardHeight } from './src/useKeyboardHeight';
+import heartSymbolData from './src/data/sydanmerkki.json';
 
 type Tab = 'scan' | 'history' | 'check' | 'settings';
 
 type Overlay =
   | { kind: 'result'; product?: Product; text?: string; offline?: boolean; back: Tab }
-  | { kind: 'ingredients'; barcode: string; name?: string; text?: string; back: Tab };
+  | { kind: 'ingredients'; barcode: string; name?: string; text?: string; back: Tab }
+  | { kind: 'skaupat'; barcode: string; back: Tab };
+
+/** Automaattinen S-kaupat-haku saa kestää tämän verran ennen kuin luovutetaan. */
+const S_KAUPAT_TIMEOUT_MS = 25000;
+
+const isHeartSymbolProduct = createHeartSymbolMatcher(heartSymbolData.products);
+
+/** Nimi ja merkinnät analyysille: kertovat mm. laktoosittomuudesta. */
+function productContext(product?: Product): string | undefined {
+  if (!product) return undefined;
+  return [product.brand, product.name, ...(product.labels ?? []), product.lactoseFree ? 'laktoositon' : ''].filter(Boolean).join(' ');
+}
+
+function heartSymbolSource(product?: Product): string | null {
+  if (!product) return null;
+  if (product.heartSymbol) return 'S-kaupat-sivun mukaan';
+  if (product.labels?.some((l) => /syd[aä]nmerk|heart-symbol/.test(l))) return 'Open Food Facts -merkinnän mukaan';
+  if (isHeartSymbolProduct(`${product.brand ?? ''} ${product.name}`)) return 'Tuotenimi löytyy Sydänmerkki-tuotteiden listalta';
+  return null;
+}
 
 const TABS: { id: Tab; label: string; icon: string }[] = [
   { id: 'scan', label: 'Skannaa', icon: '📷' },
@@ -54,6 +79,7 @@ function Main() {
   const [tab, setTab] = useState<Tab>('scan');
   const [overlay, setOverlay] = useState<Overlay | null>(null);
   const [busy, setBusy] = useState(false);
+  const [sKaupatLookup, setSKaupatLookup] = useState<{ barcode: string; partial?: Product; offline?: boolean } | null>(null);
   const [settings, setSettings] = useState<Settings>({ tolerated: [] });
   const [overrides, setOverrides] = useState<Record<string, Override>>({});
 
@@ -77,7 +103,7 @@ function Main() {
   });
 
   const showProduct = async (product: Product, back: Tab, offline?: boolean) => {
-    const analysis = analyzeIngredients(product.ingredientsText, { tolerated: settings.tolerated, productName: product.name });
+    const analysis = analyzeIngredients(product.ingredientsText, { tolerated: settings.tolerated, productName: productContext(product) });
     await addToHistory({
       barcode: product.barcode,
       name: product.name,
@@ -92,17 +118,61 @@ function Main() {
     setBusy(true);
     try {
       const result = await lookupProduct(barcode);
-      if ('notFound' in result) setOverlay({ kind: 'ingredients', barcode, back: 'scan' });
-      else await showProduct(result.product, 'scan', result.offline);
+      if (!('notFound' in result) && result.product.ingredientsText) {
+        await showProduct(result.product, 'scan', result.offline);
+        setBusy(false);
+      } else {
+        // Ainesosat puuttuvat Open Food Factsista – kokeillaan S-kauppoja (busy jatkuu).
+        const partial = 'notFound' in result ? undefined : result.product;
+        setSKaupatLookup({ barcode, partial, offline: 'notFound' in result ? undefined : result.offline });
+      }
     } catch {
+      setBusy(false);
       Alert.alert('Haku epäonnistui', 'Tuotetietoja ei saatu haettua. Tarkista verkkoyhteys.', [
         { text: 'OK', style: 'cancel' },
-        { text: 'Kirjoita ainesosat', onPress: () => setOverlay({ kind: 'ingredients', barcode, back: 'scan' }) },
+        { text: 'Kuvaa ainesosat', onPress: () => setOverlay({ kind: 'ingredients', barcode, back: 'scan' }) },
       ]);
+    }
+  };
+
+  /** Yhdistää S-kaupat-sivulta luetut tiedot aiempiin ja tallentaa ne. */
+  const saveSKaupatProduct = async (barcode: string, found: SKaupatProduct, partial?: Product | null) => {
+    const product: Product = {
+      ...partial,
+      barcode,
+      name: found.name || partial?.name || 'Nimetön tuote',
+      ingredientsText: found.ingredients,
+      heartSymbol: found.heartSymbol || undefined,
+      source: 'skaupat',
+      fetchedAt: Date.now(),
+    };
+    await saveProduct(product);
+    return product;
+  };
+
+  const finishSKaupatLookup = async (message: SKaupatMessage) => {
+    const lookup = sKaupatLookup;
+    if (!lookup) return;
+    setSKaupatLookup(null);
+    try {
+      if (message.type === 'product' && message.ingredients) {
+        await showProduct(await saveSKaupatProduct(lookup.barcode, message, lookup.partial), 'scan');
+      } else if (lookup.partial) {
+        await showProduct(lookup.partial, 'scan', lookup.offline);
+      } else {
+        setOverlay({ kind: 'ingredients', barcode: lookup.barcode, back: 'scan' });
+      }
     } finally {
       setBusy(false);
     }
   };
+
+  useEffect(() => {
+    if (!sKaupatLookup) return;
+    const timer = setTimeout(() => finishSKaupatLookup({ type: 'notFound', reason: 'aikakatkaisu' }), S_KAUPAT_TIMEOUT_MS);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sKaupatLookup]);
 
   const openHistoryItem = async (item: HistoryItem) => {
     const product = await getCachedProduct(item.barcode);
@@ -128,7 +198,7 @@ function Main() {
   const analysis = useMemo(() => {
     if (overlay?.kind !== 'result') return null;
     const text = overlay.product?.ingredientsText ?? overlay.text;
-    return analyzeIngredients(text, { tolerated: settings.tolerated, productName: overlay.product?.name });
+    return analyzeIngredients(text, { tolerated: settings.tolerated, productName: productContext(overlay.product) });
   }, [overlay, settings.tolerated]);
 
   let content: ReactNode;
@@ -140,6 +210,16 @@ function Main() {
         ingredientsText={overlay.text}
         analysis={analysis}
         offline={overlay.offline}
+        heartSymbol={heartSymbolSource(product)}
+        onMarkLactoseFree={
+          product
+            ? async () => {
+                const updated = { ...product, lactoseFree: true };
+                await saveProduct(updated);
+                setOverlay({ ...overlay, product: updated });
+              }
+            : undefined
+        }
         override={product ? overrides[product.barcode] : undefined}
         onOverride={product ? (v) => changeOverride(product.barcode, v) : undefined}
         onEditIngredients={
@@ -162,7 +242,19 @@ function Main() {
         initialName={overlay.name}
         initialText={overlay.text}
         onSubmit={(name, text) => submitIngredients(overlay.barcode, name, text, overlay.back)}
+        onSearchSKaupat={() => setOverlay({ kind: 'skaupat', barcode: overlay.barcode, back: overlay.back })}
         onCancel={closeOverlay}
+      />
+    );
+  } else if (overlay?.kind === 'skaupat') {
+    content = (
+      <SKaupatBrowserScreen
+        query={overlay.barcode}
+        onFound={async (found) => {
+          const product = await saveSKaupatProduct(overlay.barcode, found, await getCachedProduct(overlay.barcode));
+          await showProduct(product, overlay.back);
+        }}
+        onCancel={() => setOverlay({ kind: 'ingredients', barcode: overlay.barcode, back: overlay.back })}
       />
     );
   } else if (tab === 'scan') {
@@ -184,6 +276,7 @@ function Main() {
         <Text style={styles.headerTitle}>FODMAP-tutka</Text>
       </View>
       <View style={styles.content}>{content}</View>
+      {sKaupatLookup && <SKaupatFetcher key={sKaupatLookup.barcode} barcode={sKaupatLookup.barcode} onResult={finishSKaupatLookup} />}
       {!overlay && !keyboardOpen && (
         <View style={styles.tabBar}>
           {TABS.map((t) => (

@@ -29,6 +29,11 @@ Run `npm test` and `npm run typecheck` before declaring any task done.
 - `src/data/ingredients.ts` – the FODMAP ingredient dataset (Finnish, with Swedish/English fallbacks). Edit entries here.
 - `src/analysis/` – ingredient-list parser and analyzer (pure TypeScript, covered by `npm test`).
 - `src/api/openFoodFacts.ts`, `src/storage.ts` – product lookup and on-device storage.
+- `src/api/sKaupat.tsx` – fallback lookup from s-kaupat.fi in a hidden WebView (no public API; the server blocks non-browser clients). Extraction is text-based ("Ainesosat" heading) and may need updating if the site changes.
+- `modules/text-recognition/` – local Expo module wrapping ML Kit on-device OCR for photographing ingredient lists.
+- `src/data/sydanmerkki.json` – Sydänmerkki product names, refreshed by `scripts/fetch-sydanmerkki.mjs` in the APK workflow (the site has no barcodes, so products are matched by name).
+- `plugins/withScannerFixes.js` – Android config: R8 off (expo-camera looks up ML Kit by class name), Play Store package query, ML Kit model preload.
+- The APK is built by `.github/workflows/android-apk.yml`; the user installs it from the run's artifacts.
 - UI text is Finnish.
 
 ## Building with EAS

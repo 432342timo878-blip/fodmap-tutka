@@ -15,7 +15,13 @@ The app names the problem ingredients and explains why each one was flagged.
 3. The ingredient list is parsed (sub-ingredients in parentheses, percentages, "voi sisältää" trace warnings removed) and each ingredient is matched against `src/data/ingredients.ts`.
 4. Position and percentage are taken into account: EU ingredient lists are in descending order of weight, so wheat as the first ingredient is red while wheat late in the list is yellow.
 
-If a product is not in the database, type the ingredient list from the package. It is saved for that barcode, so the next scan gives the answer straight away. Products you add to Open Food Facts yourself also help other users.
+If Open Food Facts has no ingredient list, the app looks the product up on **S-kaupat.fi** in a hidden in-app browser. This is unofficial: S-kaupat has no public API, so it can stop working if their site changes. If that fails too, **photograph the ingredient list**. The text is recognised on the phone, and you can check and correct it before analysis. You can also open S-kaupat inside the app and read the ingredients from any product page.
+
+**Sydänmerkki** is shown when the S-kaupat page shows it, when Open Food Facts lists it, or when the product name matches the official Sydänmerkki product list. That list is refreshed from sydanmerkki.fi on every build.
+
+Lactose-free products are recognised from the name, from labels and from product lines (Eila, PROfeel). If the package says *laktoositon* but the app missed it, tap **Pakkauksessa lukee: laktoositon**. The app remembers it for that product.
+
+If a product is still not found, type the ingredient list from the package. It is saved for that barcode, so the next scan gives the answer straight away. Products you add to Open Food Facts yourself also help other users.
 
 **Personal settings:** in *Asetukset* you can mark FODMAP groups you tolerate (e.g. lactose), and on any product you can tap 👍/👎 to record your own experience.
 

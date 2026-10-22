@@ -14,16 +14,33 @@ interface Props {
   analysis: Analysis;
   override?: Override;
   offline?: boolean;
+  /** Mistä Sydänmerkki pääteltiin, tai null jos merkkiä ei löytynyt. */
+  heartSymbol?: string | null;
   onOverride?: (value: Override | null) => void;
   onEditIngredients?: () => void;
+  /** Käyttäjä vahvistaa pakkauksesta, että tuote on laktoositon. */
+  onMarkLactoseFree?: () => void;
   onDone: () => void;
   doneLabel?: string;
 }
 
-export function ResultView({ product, ingredientsText, analysis, override, offline, onOverride, onEditIngredients, onDone, doneLabel = 'Skannaa seuraava' }: Props) {
+export function ResultView({
+  product,
+  ingredientsText,
+  analysis,
+  override,
+  offline,
+  heartSymbol,
+  onOverride,
+  onEditIngredients,
+  onMarkLactoseFree,
+  onDone,
+  doneLabel = 'Skannaa seuraava',
+}: Props) {
   const [showIngredients, setShowIngredients] = useState(false);
   const verdict = VERDICT_STYLE[analysis.verdict];
   const text = product?.ingredientsText ?? ingredientsText;
+  const lactoseFlagged = !analysis.lactoseFree && analysis.findings.some((f) => f.severity !== 'ok' && f.entry.groups.includes('laktoosi'));
 
   return (
     <ScrollView contentContainerStyle={styles.container}>
@@ -35,7 +52,7 @@ export function ResultView({ product, ingredientsText, analysis, override, offli
             {product.brand ? <Text style={styles.muted}>{product.brand}</Text> : null}
             <Text style={styles.small}>
               {product.barcode}
-              {product.source === 'manual' ? ' · oma merkintä' : ' · Open Food Facts'}
+              {SOURCE_LABEL[product.source]}
               {offline ? ' · offline' : ''}
             </Text>
           </View>
@@ -49,6 +66,13 @@ export function ResultView({ product, ingredientsText, analysis, override, offli
           <Text style={styles.verdictSubtitle}>{verdict.subtitle}</Text>
         </View>
       </View>
+
+      {heartSymbol && (
+        <View style={styles.heart}>
+          <Text style={styles.heartText}>❤️ Sydänmerkki</Text>
+          <Text style={styles.small}>{heartSymbol}</Text>
+        </View>
+      )}
 
       {override && (
         <View style={[styles.override, { borderColor: override === 'ok' ? colors.green : colors.red }]}>
@@ -65,6 +89,10 @@ export function ResultView({ product, ingredientsText, analysis, override, offli
             <FindingRow key={f.entry.id} finding={f} />
           ))}
         </View>
+      )}
+
+      {lactoseFlagged && onMarkLactoseFree && (
+        <Button label="Pakkauksessa lukee: laktoositon" variant="secondary" onPress={onMarkLactoseFree} />
       )}
 
       {analysis.verdict === 'green' && analysis.safe.length > 0 && (
@@ -117,6 +145,12 @@ export function ResultView({ product, ingredientsText, analysis, override, offli
   );
 }
 
+const SOURCE_LABEL: Record<Product['source'], string> = {
+  off: ' · Open Food Facts',
+  skaupat: ' · S-kaupat',
+  manual: ' · oma merkintä',
+};
+
 function FindingRow({ finding }: { finding: Finding }) {
   const color = SEVERITY_COLOR[finding.severity];
   return (
@@ -148,6 +182,8 @@ const styles = StyleSheet.create({
   verdictIcon: { fontSize: 40, fontWeight: '800', width: 44, textAlign: 'center' },
   verdictTitle: { fontSize: 21, fontWeight: '800' },
   verdictSubtitle: { fontSize: 14, color: colors.text, marginTop: 2 },
+  heart: { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: colors.surface, borderRadius: 10, padding: 10 },
+  heartText: { fontSize: 16, fontWeight: '700', color: colors.red },
   override: { borderWidth: 1, borderRadius: 10, padding: 10, backgroundColor: colors.surface },
   overrideText: { fontSize: 15, fontWeight: '600', color: colors.text },
   section: { backgroundColor: colors.surface, borderRadius: 12, padding: 14, gap: 12 },

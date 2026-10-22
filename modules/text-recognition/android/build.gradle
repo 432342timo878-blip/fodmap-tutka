@@ -1,0 +1,20 @@
+plugins {
+  id 'com.android.library'
+  id 'expo-module-gradle-plugin'
+}
+
+group = 'fi.fodmaptutka'
+version = '1.0.0'
+
+android {
+  namespace "expo.modules.textrecognition"
+  defaultConfig {
+    versionCode 1
+    versionName "1.0.0"
+  }
+}
+
+dependencies {
+  // Play-palveluiden kautta ladattava tekstintunnistusmalli (ei kasvata sovellusta).
+  implementation "com.google.android.gms:play-services-mlkit-text-recognition:19.0.1"
+}

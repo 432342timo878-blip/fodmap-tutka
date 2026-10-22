@@ -25,7 +25,10 @@ const NOISE_PATTERNS: RegExp[] = [
   /kann spuren[^.]*(\.|$)/g,
 ];
 
-const CUT_MARKERS = ['ravintosisältö', 'ravintoarvo', 'säilytys', 'säilytä ', 'ingredienser:', 'ingredients:', 'nutrition'];
+const CUT_MARKERS = [
+  'ravintosisältö', 'ravintoarvo', 'säilytys', 'säilytä ', 'valmistusmaa', 'alkuperämaa', 'valmistaja:', 'pakkaaja:',
+  'käyttöohje', 'allergeenit:', 'ingredienser', 'ingredients:', 'nutrition',
+];
 
 export function normalize(text: string): string {
   let s = text.toLowerCase();

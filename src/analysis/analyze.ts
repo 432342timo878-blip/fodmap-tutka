@@ -30,6 +30,7 @@ export interface Analysis {
 export interface AnalysisOptions {
   /** FODMAP-ryhmät, joita käyttäjä sietää. */
   tolerated?: FodmapGroup[];
+  /** Tuotteen nimi ja merkinnät: kertovat esim. laktoosittomuudesta ja tuotetyypistä. */
   productName?: string;
 }
 
@@ -135,7 +136,8 @@ function judge(entry: IngredientEntry, index: number, percent: number | undefine
   }
 }
 
-const LACTOSE_FREE_MARKERS = ['laktoositon', 'laktoositonta', 'laktoosittom', 'laktaasi', 'vähälaktoosi', 'lactose-free', 'lactose free', 'laktosfri'];
+// Laktoosittomuus voi lukea nimessä, merkinnöissä (OFF: en:lactose-free) tai tuotesarjassa (Valio Eila, PROfeel).
+const LACTOSE_FREE = /laktoositon|laktoosittom|laktaasi|vähälaktoosi|lactose[- ]free|no-lactose|laktosfri|lactofree|zero lactose|(^|[^a-zåäö])(eila|profeel)([^a-zåäö]|$)/;
 /** Juoksete päätason luettelossa tarkoittaa, että tuote on juustoa tai rahkaa. */
 const RENNET_MARKERS = ['juoksete', 'juoksute', 'juoksutin', 'rennet', 'löpe'];
 const MILK_ENTRY_IDS = new Set(['maito', 'maitojauhe']);
@@ -150,7 +152,7 @@ export function analyzeIngredients(ingredientText: string | undefined | null, op
   const segments = ingredientText ? parseIngredients(ingredientText) : [];
 
   const haystack = normalize(`${options.productName ?? ''} ${ingredientText ?? ''}`);
-  const lactoseFree = LACTOSE_FREE_MARKERS.some((m) => haystack.includes(m));
+  const lactoseFree = LACTOSE_FREE.test(haystack);
   const isCheeseOrQuark = segments.some((seg) => RENNET_MARKERS.some((m) => seg.text.includes(m)));
   const isHardCheese =
     isCheeseOrQuark && matchText(normalize(options.productName ?? '')).some((en) => en.id === 'juusto');

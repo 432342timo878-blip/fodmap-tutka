@@ -33,6 +33,11 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      # Sydänmerkki-lista päivittyy jokaiseen versioon. Jos sivusto ei vastaa, käytetään edellistä listaa.
+      - name: Update Sydänmerkki product list
+        continue-on-error: true
+        run: node scripts/fetch-sydanmerkki.mjs
+
       - name: Test
         run: |
           npm test
