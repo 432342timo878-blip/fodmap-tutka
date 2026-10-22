@@ -9,13 +9,18 @@ jobs:
     steps:
       - name: Sydanmerkki criteria
         run: |
-          curl -sL 'https://www.sydanmerkki.fi/sydanmerkki/millainen-tuote-saa-sydanmerkin' -o c.html -w 'status %{http_code}\n'
-          grep -o -i 'href="[^"]*\(\.pdf\|kriteer\|criteria\)[^"]*"' c.html | sort -u
-          python3 - <<'PY'
-          import re,html
-          s=open('c.html',encoding='utf-8',errors='ignore').read()
-          s=re.sub(r'(?s)<(script|style|nav|header|footer)[^>]*>.*?</\1>',' ',s)
-          t=html.unescape(re.sub(r'<[^>]+>','\n',s))
-          lines=[l.strip() for l in t.split('\n') if l.strip()]
-          print('\n'.join(lines)[:6000])
-          PY
+          curl -sL 'https://www.sydanmerkki.fi/sydanmerkki/millainen-tuote-saa-sydanmerkin' -o c.html
+          grep -o -i '<a[^>]*>[^<]*\(täältä\|kriteerit\)[^<]*</a>' c.html | sort -u | head
+          grep -o -i 'href="[^"]*kriteer[^"]*"' c.html | sort -u
+          for u in $(grep -o -i 'href="[^"]*kriteer[^"]*"' c.html | sed 's/href="//;s/"$//' | sort -u | head -3); do
+            echo "=== $u"; curl -sL "$u" -o k.html -w 'status %{http_code}\n'
+            grep -o -i 'href="[^"]*\.\(pdf\|xlsx\|docx\)[^"]*"' k.html | sort -u | head
+          done
+      - name: Criteria document text
+        run: |
+          sudo apt-get install -y -qq poppler-utils >/dev/null 2>&1 || true
+          curl -sL 'https://www.sydanmerkki.fi/sydanmerkki/millainen-tuote-saa-sydanmerkin' -o c.html
+          for u in $(grep -o -i 'href="[^"]*kriteer[^"]*"' c.html | sed 's/href="//;s/"$//' | sort -u | head -3); do curl -sL "$u" >> k.html; done
+          P=$(grep -o -i 'href="[^"]*\.pdf[^"]*"' k.html | sed 's/href="//;s/"$//;s/&amp;/\&/g' | grep -i 'kriteer\|criteria\|sydanmerk' | head -1)
+          echo "PDF: $P"
+          if [ -n "$P" ]; then curl -sL "$P" -o k.pdf && pdftotext -layout k.pdf k.txt && wc -l k.txt && cat k.txt | head -400; fi
