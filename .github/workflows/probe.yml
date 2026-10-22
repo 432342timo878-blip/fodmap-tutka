@@ -7,21 +7,12 @@ jobs:
   probe:
     runs-on: ubuntu-latest
     steps:
-      - name: Sydanmerkki product page and listing
+      - name: Sydanmerkki search API
         run: |
-          curl -sL 'https://www.sydanmerkki.fi/tuotteet/juustoportti-kaurajuoma-1-l' -o p.html -w 'status %{http_code} size %{size_download}\n'
-          grep -o -i '.\{80\}\(ean\|gtin\|viivakoodi\).\{120\}' p.html | head -5
-          grep -o '[^0-9][0-9]\{13\}[^0-9]' p.html | sort -u | head -5
-          sed -e 's/<[^>]*>/ /g' p.html | tr -s ' \n' | grep -i -o '.\{0,60\}kaurajuoma.\{0,200\}' | head -5
-          curl -sL 'https://www.sydanmerkki.fi/tuotteet' -o l.html -w 'listing status %{http_code} size %{size_download}\n'
-          echo "product links on listing: $(grep -o 'href="https://www.sydanmerkki.fi/tuotteet/[^"]*"' l.html | sort -u | wc -l)"
-          grep -o -i 'href="[^"]*\(page\|sivu\)[^"]*"' l.html | sort -u | head -5
-          grep -o -i '\(api\|json\|wp-json\|ajax\)[^"'"'"' ]\{0,120\}' l.html | sort -u | head -15
-          grep -o -i '.\{60\}[0-9]\{3,4\} tuote.\{40\}' l.html | head -3
-          curl -s 'https://www.sydanmerkki.fi/wp-json/' -o w.json -w 'wp-json status %{http_code} size %{size_download}\n'; head -c 400 w.json; echo
-      - name: Open Food Facts
-        run: |
-          curl -s -A 'FODMAP-tutka-probe/1.0 (github actions)' 'https://world.openfoodfacts.org/api/v2/search?countries_tags_en=finland&fields=code,labels_tags&page_size=100' -o off.json -w 'status %{http_code} size %{size_download}\n'
-          head -c 300 off.json; echo
-          grep -o '"count":[0-9]*' off.json
-          grep -o -i '"[a-z]*:[^"]*\(syd\|heart\|laktoositon\|lactose\)[^"]*"' off.json | sort | uniq -c
+          curl -sL 'https://www.sydanmerkki.fi/tuotteet' -o l.html
+          grep -o -i '.\{300\}api/search/products.json.\{400\}' l.html | head -2
+          for u in 'https://www.sydanmerkki.fi/api/search/products.json' 'https://www.sydanmerkki.fi/api/search/products.json?q=kaura' 'https://www.sydanmerkki.fi/api/search/products.json?query=kaura'; do
+            echo "== $u"; curl -sL "$u" -o a.json -w 'status %{http_code} size %{size_download}\n'; head -c 1500 a.json; echo
+          done
+          echo "pages:"; grep -o 'page=[0-9]*' l.html | sort -t= -k2 -n -u | tail -3
+          grep -o -i '[0-9]\+ tuotetta\|tuotteita [0-9]\+\|[0-9]\+ hakutulos[a-z]*' l.html | head
