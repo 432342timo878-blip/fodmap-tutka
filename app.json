@@ -1,0 +1,35 @@
+{
+  "expo": {
+    "name": "FODMAP-tutka",
+    "slug": "fodmap-tutka",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#2F6F4E",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "predictiveBackGestureEnabled": false,
+      "package": "fi.fodmaptutka.app",
+      "permissions": [
+        "android.permission.CAMERA"
+      ]
+    },
+    "platforms": [
+      "android"
+    ],
+    "plugins": [
+      [
+        "expo-camera",
+        {
+          "recordAudioAndroid": false,
+          "barcodeScannerEnabled": true
+        }
+      ]
+    ]
+  }
+}
