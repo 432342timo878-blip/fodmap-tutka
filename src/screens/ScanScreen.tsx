@@ -40,7 +40,8 @@ export function ScanScreen({ busy, onBarcode, launchRequest }: Props) {
     } catch (e) {
       const message = e instanceof Error ? e.message : String(e);
       if (/cancel/i.test(message)) return;
-      setError('Googlen viivakoodinlukija ei käynnistynyt. Käytetään sovelluksen omaa kameraa.');
+      // Virheviesti näytetään, jotta ongelman syy selviää kuvakaappauksesta.
+      setError(`Googlen viivakoodinlukija ei käynnistynyt, käytetään sovelluksen omaa kameraa. (${message})`);
       setMode('camera');
     }
   };

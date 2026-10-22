@@ -29,7 +29,8 @@
           "recordAudioAndroid": false,
           "barcodeScannerEnabled": true
         }
-      ]
+      ],
+      "./plugins/withScannerFixes"
     ]
   }
 }
