@@ -1,0 +1,21 @@
+# Väliaikainen: hakee Sydänmerkin viralliset kriteerit. Poistetaan tutkimuksen jälkeen.
+name: Probe data sources
+on:
+  push:
+    paths: ['.github/workflows/probe.yml']
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Sydanmerkki criteria
+        run: |
+          curl -sL 'https://www.sydanmerkki.fi/sydanmerkki/millainen-tuote-saa-sydanmerkin' -o c.html -w 'status %{http_code}\n'
+          grep -o -i 'href="[^"]*\(\.pdf\|kriteer\|criteria\)[^"]*"' c.html | sort -u
+          python3 - <<'PY'
+          import re,html
+          s=open('c.html',encoding='utf-8',errors='ignore').read()
+          s=re.sub(r'(?s)<(script|style|nav|header|footer)[^>]*>.*?</\1>',' ',s)
+          t=html.unescape(re.sub(r'<[^>]+>','\n',s))
+          lines=[l.strip() for l in t.split('\n') if l.strip()]
+          print('\n'.join(lines)[:6000])
+          PY

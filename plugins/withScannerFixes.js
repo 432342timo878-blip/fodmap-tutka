@@ -26,9 +26,13 @@ const withScannerFixes = (config) => {
     const hasPackage = manifest.queries.some((q) => (q.package ?? []).some((p) => p.$['android:name'] === PLAY_STORE));
     if (!hasPackage) manifest.queries.push({ package: [{ $: { 'android:name': PLAY_STORE } }] });
 
+    // expo-camera määrittelee saman avaimen arvolla "barcode_ui"; tämä korvaa sen.
+    manifest.$['xmlns:tools'] = 'http://schemas.android.com/tools';
     const application = manifest.application[0];
     application['meta-data'] = (application['meta-data'] ?? []).filter((m) => m.$['android:name'] !== MLKIT_DEPENDENCIES);
-    application['meta-data'].push({ $: { 'android:name': MLKIT_DEPENDENCIES, 'android:value': 'barcode_ui,ocr' } });
+    application['meta-data'].push({
+      $: { 'android:name': MLKIT_DEPENDENCIES, 'android:value': 'barcode_ui,ocr', 'tools:replace': 'android:value' },
+    });
     return cfg;
   });
 
