@@ -52,6 +52,9 @@ export const STORES: Store[] = [
 
 export const STORE_BY_ID = Object.fromEntries(STORES.map((s) => [s.id, s])) as Record<StoreId, Store>;
 
+/** Piilotettu selain tarvitaan vain kaupoille, jotka estävät suorat pyynnöt. Tokmanni haetaan suoraan (tokmanni.ts). */
+const WEBVIEW_STORES = STORES.filter((s) => s.id !== 'tokmanni');
+
 export interface StoreProduct {
   store: PageSourceId;
   name?: string;
@@ -149,6 +152,18 @@ export function extractionScript(store: Pick<Store, 'productPath' | 'resultLinks
   }
 
   function tick() {
+    // Bottisuojaus (S-kaupat: Vercel, K-Ruoka: Cloudflare) näyttää ensin tarkistussivun, joka lataa
+    // varsinaisen sivun itse. Odotetaan sitä; jos tarkistus epäonnistuu, kerrotaan syy.
+    var head = (document.title + ' ' + ((document.body && document.body.innerText) || '').slice(0, 400)).toLowerCase();
+    if (/failed to verify|pyyntö estetty|request blocked|access denied|request could not be satisfied/.test(head)) {
+      post({ type: 'notFound', reason: 'bottisuojaus esti haun' });
+      return;
+    }
+    if (/security checkpoint|checking your browser|just a moment|verifying you are human|hetkinen/.test(head)) {
+      started = Date.now();
+      setTimeout(tick, 700);
+      return;
+    }
     var elapsed = Date.now() - started;
     if (isProductPage()) {
       if (!expanded && elapsed > 1500) { expanded = true; expandSections(); }
@@ -190,7 +205,7 @@ export function extractionScript(store: Pick<Store, 'productPath' | 'resultLinks
 }
 
 export function describeReasons(reasons: Map<PageSourceId, string>): string {
-  return STORES.map((s) => `${s.name}: ${reasons.get(s.id) ?? 'ei vastannut ajoissa'}`).join(' · ');
+  return WEBVIEW_STORES.map((s) => `${s.name}: ${reasons.get(s.id) ?? 'ei vastannut ajoissa'}`).join(' · ');
 }
 
 export function parseMessage(e: WebViewMessageEvent, store: PageSourceId): StoreMessage {
@@ -223,14 +238,14 @@ export function StoreLookup({ barcode, accept, onResult }: LookupProps) {
     }
     if (reasons.current.has(message.store)) return;
     reasons.current.set(message.store, message.type === 'notFound' ? message.reason : 'tuotesivulta ei löytynyt tietoja');
-    if (reasons.current.size === STORES.length) {
+    if (reasons.current.size === WEBVIEW_STORES.length) {
       done.current = true;
       onResult({ type: 'notFound', store: message.store, reason: describeReasons(reasons.current) });
     }
   };
   return (
     <View style={styles.hidden} pointerEvents="none">
-      {STORES.map((store) => (
+      {WEBVIEW_STORES.map((store) => (
         <WebView
           key={store.id}
           style={styles.web}

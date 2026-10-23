@@ -11,6 +11,7 @@ import { Product } from './src/api/openFoodFacts';
 import { Share, subscribeToShares } from './modules/share-intent';
 import { recognizeTextAsync } from './modules/text-recognition';
 import { ingredientsFromOcrLines } from './src/analysis/ocrText';
+import { fetchTokmanni } from './src/api/tokmanni';
 import { SharedPageReader, STORE_BY_ID, StoreLookup, StoreMessage, StoreProduct } from './src/api/stores';
 import { HeartSection } from './src/components/HeartSection';
 import { ResultView } from './src/components/ResultView';
@@ -105,6 +106,8 @@ function Main() {
     barcode: string;
     /** Ruoka: ainesosat FODMAP-arvioon. Lisäravinne: vitamiinitaulukko pinoon. */
     purpose: 'food' | 'supplement';
+    /** Tokmannin (suora haku) tulos, liitetään syihin, jos muutkaan kaupat eivät löydä. */
+    tokmanniInfo?: string;
     partial?: Product;
     offline?: boolean;
   } | null>(null);
@@ -161,7 +164,19 @@ function Main() {
       } else {
         // Ainesosat puuttuvat Open Food Factsista – kokeillaan verkkokauppoja (busy jatkuu).
         const partial = 'notFound' in result ? undefined : result.product;
-        setStoreLookup({ barcode, purpose: 'food', partial, offline: 'notFound' in result ? undefined : result.offline });
+        const tokmanni = await fetchTokmanni(barcode).catch(() => null);
+        if (tokmanni?.ingredients) {
+          await showProduct(await saveStoreProduct(barcode, tokmanni, partial), 'scan');
+          setBusy(false);
+          return;
+        }
+        setStoreLookup({
+          barcode,
+          purpose: 'food',
+          partial,
+          offline: 'notFound' in result ? undefined : result.offline,
+          tokmanniInfo: `Tokmanni: ${tokmanni ? 'ei ainesosia' : 'ei valikoimissa'}`,
+        });
       }
     } catch {
       setBusy(false);
@@ -209,7 +224,9 @@ function Main() {
           unitsPerDay: label.doseUnits ?? 1,
         },
         !hasLabel,
-        found ? `Tiedot: ${STORE_BY_ID[found.store as keyof typeof STORE_BY_ID]?.name ?? 'verkkosivu'}` : `Haku verkkokaupoista: ${message.type === 'notFound' ? message.reason : ''}`,
+        found
+          ? `Tiedot: ${STORE_BY_ID[found.store as keyof typeof STORE_BY_ID]?.name ?? 'verkkosivu'}`
+          : `Haku verkkokaupoista: ${lookup.tokmanniInfo} · ${message.type === 'notFound' ? message.reason : ''}`,
       );
       return;
     }
@@ -222,7 +239,7 @@ function Main() {
         setOverlay({
           kind: 'ingredients',
           barcode: lookup.barcode,
-          lookupInfo: message.type === 'notFound' ? `Open Food Facts: ei ainesosia · ${message.reason}` : undefined,
+          lookupInfo: message.type === 'notFound' ? `Open Food Facts: ei ainesosia · ${lookup.tokmanniInfo} · ${message.reason}` : undefined,
           back: 'scan',
         });
       }
@@ -308,7 +325,31 @@ function Main() {
     } catch {
       // Verkkokaupat yritetään silti.
     }
-    setStoreLookup({ barcode, purpose: 'supplement', partial });
+    const tokmanni = await fetchTokmanni(barcode).catch(() => null);
+    const tokmanniLabel = tokmanni && parseSupplementText(`${tokmanni.nutritionText ?? ''}\n${tokmanni.pageText ?? ''}`);
+    if (tokmanni && tokmanniLabel && Object.keys(tokmanniLabel.amounts).length > 0) {
+      setBusy(false);
+      openNewSupplement(
+        {
+          barcode,
+          name: partial?.name ?? tokmanni.name ?? '',
+          brand: partial?.brand,
+          ingredientsText: tokmanni.ingredients ?? partial?.ingredientsText,
+          amounts: tokmanniLabel.amounts,
+          doseUnits: tokmanniLabel.doseUnits ?? 1,
+          unitsPerDay: tokmanniLabel.doseUnits ?? 1,
+        },
+        false,
+        'Tiedot: Tokmanni. Tarkista annoskoko pakkauksesta.',
+      );
+      return;
+    }
+    setStoreLookup({
+      barcode,
+      purpose: 'supplement',
+      partial,
+      tokmanniInfo: `Tokmanni: ${tokmanni ? 'ei vitamiinitaulukkoa' : 'ei valikoimissa'}`,
+    });
   };
 
   const saveSupplement = async (s: Supplement) => {

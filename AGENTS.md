@@ -29,7 +29,9 @@ Run `npm test` and `npm run typecheck` before declaring any task done.
 - `src/data/ingredients.ts` – the FODMAP ingredient dataset (Finnish, with Swedish/English fallbacks). Edit entries here.
 - `src/analysis/` – ingredient-list parser and analyzer (pure TypeScript, covered by `npm test`).
 - `src/api/openFoodFacts.ts`, `src/storage.ts` – product lookup and on-device storage.
-- `src/api/stores.tsx` – fallback lookup from S-kaupat, K-Ruoka and Tokmanni in hidden WebViews, all in parallel (no public APIs; their servers block non-browser and datacenter clients, so this can't be tested from CI). Extraction is text-based ("Ainesosat" / "Ravintosisältö" headings) and may need updating if a site changes.
+- `src/api/tokmanni.ts` – Tokmanni lookup by EAN via its Klevu search API and server-rendered product pages (plain fetch; tested).
+- `src/api/stores.tsx` – fallback lookup from S-kaupat and K-Ruoka in hidden WebViews (their bot protection blocks servers, so this can't be tested from CI; it waits through the Vercel/Cloudflare checkpoint page). Extraction is text-based ("Ainesosat" / "Ravintosisältö" headings). The in-app store browser also has a Tokmanni tab.
+- `docs/store-data-findings.md` – what is known about each store's data and blocking. Update it when you learn more.
 - `src/analysis/heartCriteria.ts` – Sydänmerkki product-group criteria transcribed from sydanmerkki.fi (10/2026); `nutrition.ts` parses nutrition tables (store pages, OCR).
 - `modules/text-recognition/` – local Expo module wrapping ML Kit on-device OCR for photographing ingredient lists.
 - `modules/share-intent/` – local Expo module receiving Android "Share" intents (text/URL or image). Shared pages are read with `SharedPageReader` (`src/api/stores.tsx`); supplement labels go to the stack preview, food to the FODMAP result.
