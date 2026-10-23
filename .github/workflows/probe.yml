@@ -1,0 +1,37 @@
+# Väliaikainen: tutkii tietolähteitä. Poistetaan tutkimuksen jälkeen.
+name: Probe data sources
+on:
+  push:
+    paths: ['.github/workflows/probe.yml']
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Probe
+        run: |
+          UA='Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130 Mobile Safari/537.36'
+          show() { python3 -c "
+          import re,html,sys
+          s=open(sys.argv[1],encoding='utf-8',errors='ignore').read()
+          s=re.sub(r'(?s)<(script|style)[^>]*>.*?</\1>',' ',s)
+          s=re.sub(r'(?i)<(br|/p|/div|/li|/tr|/h\d|/td)[^>]*>','\n',s)
+          t=html.unescape(re.sub(r'<[^>]+>',' ',s))
+          L=[re.sub(r'\s+',' ',l).strip() for l in t.split('\n')]
+          L=[l for l in L if l]
+          hits=[i for i,l in enumerate(L) if re.search(r'magnesium|päiväannos|ravintolisä|ainesosat|sisältää',l,re.I)]
+          seen=set()
+          for i in hits[:12]:
+            for j in range(max(0,i-1),min(len(L),i+3)):
+              if j not in seen: seen.add(j); print('  |',L[j][:200])
+          " "$1"; }
+          for u in \
+            'https://www.puhdasplus.fi/?s=ilta+magnesium' \
+            'https://www.puhdasplus.fi/tuote/puhdas-ilta-magnesium/' \
+            'https://www.yliopistonapteekki.fi/haku?q=puhdas%2B%20ilta%20magnesium' \
+            'https://www.ruohonjuuri.fi/search?q=puhdas+ilta+magnesium' \
+            'https://world.openfoodfacts.org/cgi/search.pl?search_terms=puhdas+ilta+magnesium&json=1&page_size=5&fields=code,product_name,brands'; do
+            echo "=== $u"; curl -sL -A "$UA" "$u" -o p.html -w 'status %{http_code} size %{size_download} final %{url_effective}\n'
+            grep -o 'href="[^"]*\(ilta\|magnesium\)[^"]*"' p.html | sort -u | head -6
+            head -c 600 p.html | grep -q '"products"' && head -c 1500 p.html
+            show p.html | head -40
+          done
