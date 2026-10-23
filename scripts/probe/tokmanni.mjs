@@ -2,9 +2,9 @@
 import { chromium } from 'playwright';
 
 const KLEVU = (term) =>
-  `https://eucs11.ksearchnet.com/cloud-search/n-search/search?ticket=klevu-15488592134928913&term=${encodeURIComponent(term)}&paginationStartsFrom=0&sortPrice=false&ipAddress=undefined&analyticsApiKey=klevu-15488592134928913&noOfResults=5`;
+  `https://eucs11.ksearchnet.com/cloud-search/n-search/search?ticket=klevu-15488592134928913&term=${encodeURIComponent(term)}&paginationStartsFrom=0&sortPrice=false&ipAddress=undefined&analyticsApiKey=klevu-15488592134928913&noOfResults=5&responseType=json`;
 
-for (const term of ['fazer leipä', 'magnesium', 'valio jogurtti']) {
+for (const term of ['8710671205056', 'keksi', 'magnesium tabletti', 'jogurtti']) {
   const data = await (await fetch(KLEVU(term))).json();
   console.log(`\n=== Klevu "${term}": ${data.meta.totalResultsFound} tulosta`);
   const r = data.result?.[0];
@@ -16,7 +16,9 @@ for (const term of ['fazer leipä', 'magnesium', 'valio jogurtti']) {
   }
 }
 
-const data = await (await fetch(KLEVU('fazer leipä'))).json();
+const data = await (await fetch(KLEVU('magnesium tabletti'))).json();
+const food = await (await fetch(KLEVU('keksi'))).json();
+data.result = [...(food.result ?? []).slice(0, 1), ...(data.result ?? []).slice(0, 1)];
 const browser = await chromium.launch();
 const page = await browser.newPage({ locale: 'fi-FI' });
 for (const r of (data.result ?? []).slice(0, 2)) {
