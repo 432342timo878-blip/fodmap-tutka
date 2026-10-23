@@ -1,19 +1,14 @@
-# Väliaikainen: tutkii tietolähteitä. Poistetaan tutkimuksen jälkeen.
+# Väliaikainen: lisäravinnekeräimen testiajo ilman APK-käännöstä. Poistetaan testauksen jälkeen.
 name: Probe data sources
 on:
   push:
-    paths: ['.github/workflows/probe.yml']
+    paths: ['.github/workflows/probe.yml', 'scripts/fetch-supplements.mjs']
 jobs:
   probe:
     runs-on: ubuntu-latest
     steps:
-      - shell: bash
-        run: |
-          set +e
-          for u in https://www.apteekki360.fi/products/centrum-men-50-plus-monivitamiini-60-kpl https://www.ruohonjuuri.fi/products/puhdistamo-nivel-pro-120-kaps https://www.puhdistamo.fi/products/nivel-pro-120-kaps; do
-            echo "=== $u"; curl -s "$u" -o r.html -w 'size %{size_download}\n'
-            echo "mg mentions in raw html: $(grep -o -i '[0-9] \?\(mg\|µg\|mikrog\)' r.html | wc -l)"
-            grep -o -i '.\{160\}[0-9] \?\(mg\|µg\|mikrog\).\{80\}' r.html | head -4
-            grep -o -i '<img[^>]*\(ravinto\|nutrition\|etiketti\|label\|taulukko\)[^>]*>' r.html | head -2
-            grep -o -i '"[a-z_]*\(metafield\|ravinto\|ainesosa\|nutrition\)[a-z_]*"' r.html | sort | uniq -c | head -5
-          done
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: SAMPLE=60 node scripts/fetch-supplements.mjs

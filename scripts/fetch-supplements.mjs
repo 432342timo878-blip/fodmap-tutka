@@ -113,10 +113,17 @@ for (const shop of SHOPS) {
   let examples = 0;
   const todo = SAMPLE ? candidates.filter((_, i) => i % Math.max(1, Math.floor(candidates.length / SAMPLE)) === 0).slice(0, SAMPLE) : candidates;
   const found = await pool(todo, async (p) => {
-    const html = await get(`https://${shop.host}/products/${p.handle}`);
-    const lines = htmlLines(html);
-    const labelLines = lines.filter((l) => l.length < 300 && AMOUNT_LINE.test(l));
-    const labelText = [...new Set(labelLines)].slice(0, 60).join('\n');
+    // Tuotekuvaus (body_html) on jo tuotelistassa; tuotesivu haetaan vain, jos taulukko ei ole siinä
+    // (esim. Ruohonjuuri näyttää taulukon erillisestä kentästä).
+    const labelFrom = (ls) => [...new Set(ls.filter((l) => l.length < 300 && AMOUNT_LINE.test(l)))].slice(0, 60).join('\n');
+    let html = '';
+    let lines = htmlLines(p.body_html ?? '');
+    let labelText = labelFrom(lines);
+    if (!NUTRIENT_AMOUNT.test(labelText)) {
+      html = await get(`https://${shop.host}/products/${p.handle}`);
+      lines = htmlLines(html);
+      labelText = labelFrom(lines);
+    }
     if (!NUTRIENT_AMOUNT.test(labelText)) {
       if (SAMPLE && examples++ < 3) {
         const amountLines = lines.filter((l) => /\d\s*(mg|µg|μg|mcg)/i.test(l)).slice(0, 6);
@@ -137,11 +144,8 @@ for (const shop of SHOPS) {
       const js = await get(`https://${shop.host}/products/${p.handle}.js`, 'json');
       for (const v of js.variants ?? []) if (/^\d{8,14}$/.test(String(v.barcode ?? ''))) eans.add(String(v.barcode));
     }
-    if (eans.size === 0) {
-      count('ei viivakoodia');
-      return null;
-    }
-    count('ok');
+    // Ilman viivakoodia tuote löytyy sovelluksessa nimihaulla.
+    count(eans.size === 0 ? 'vain nimellä' : 'viivakoodilla');
 
     const ingredientsLine = lines.find((l) => /^(ainesosat|ainekset|raaka-aineet)\b/i.test(l));
     return {

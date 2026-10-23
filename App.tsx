@@ -24,7 +24,7 @@ import { SupplementEditScreen } from './src/screens/SupplementEditScreen';
 import { SupplementsScreen } from './src/screens/SupplementsScreen';
 import { scanBarcodeOnce } from './src/scanner';
 import { Supplement } from './src/supplements/assess';
-import { findSupplement } from './src/supplements/database';
+import { DbMatch, findSupplement } from './src/supplements/database';
 import { isSupplementLabel, parseSupplementText } from './src/supplements/nutrients';
 import { StoreBrowserScreen } from './src/screens/StoreBrowserScreen';
 import {
@@ -264,6 +264,21 @@ function Main() {
     setOverlay({ kind: 'supplementEdit', draft, isNew: true, needsLabel, lookupInfo, back: 'supplements' });
   };
 
+  const openFromDatabase = (m: DbMatch) =>
+    openNewSupplement(
+      {
+        barcode: m.barcode,
+        name: m.name,
+        brand: m.brand,
+        ingredientsText: m.ingredients,
+        amounts: m.label.amounts,
+        doseUnits: m.label.doseUnits ?? 1,
+        unitsPerDay: m.label.doseUnits ?? 1,
+      },
+      Object.keys(m.label.amounts).length === 0,
+      `Tiedot: ${m.shop} (sovelluksen tietokanta). Tarkista annoskoko pakkauksesta.`,
+    );
+
   const scanSupplement = async () => {
     let barcode: string | null;
     try {
@@ -281,19 +296,7 @@ function Main() {
     // Ensin sovelluksen oma terveyskauppatietokanta: nopea ja toimii ilman verkkoa.
     const known = findSupplement(barcode);
     if (known && Object.keys(known.label.amounts).length > 0) {
-      openNewSupplement(
-        {
-          barcode,
-          name: known.name,
-          brand: known.brand,
-          ingredientsText: known.ingredients,
-          amounts: known.label.amounts,
-          doseUnits: known.label.doseUnits ?? 1,
-          unitsPerDay: known.label.doseUnits ?? 1,
-        },
-        false,
-        `Tiedot: ${known.shop} (sovelluksen tietokanta). Tarkista annoskoko pakkauksesta.`,
-      );
+      openFromDatabase(known);
       return;
     }
     setBusy(true);
@@ -514,6 +517,7 @@ function Main() {
         onScan={scanSupplement}
         onAddManually={() => openNewSupplement({ name: '', amounts: {}, doseUnits: 1, unitsPerDay: 1 }, true)}
         onOpen={(s) => setOverlay({ kind: 'supplementEdit', draft: s, isNew: false, back: 'supplements' })}
+        onPick={openFromDatabase}
       />
     );
   } else if (tab === 'scan') {

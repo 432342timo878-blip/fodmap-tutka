@@ -1,7 +1,9 @@
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useState } from 'react';
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { Button } from '../components/Button';
 import { assessStack, daysLeft, Level, Supplement } from '../supplements/assess';
+import { DbMatch, searchSupplements, supplementDbSize } from '../supplements/database';
 import { formatAmount, NUTRIENT_BY_ID } from '../supplements/nutrients';
 import { colors } from '../theme';
 
@@ -11,6 +13,7 @@ interface Props {
   onScan: () => void;
   onAddManually: () => void;
   onOpen: (s: Supplement) => void;
+  onPick: (match: DbMatch) => void;
 }
 
 export const LEVEL_STYLE: Record<Level, { color: string; bg: string; icon: string }> = {
@@ -21,13 +24,38 @@ export const LEVEL_STYLE: Record<Level, { color: string; bg: string; icon: strin
 
 const STATUS_COLOR = { over: colors.red, ok: colors.green, low: colors.muted, none: colors.text };
 
-export function SupplementsScreen({ supplements, busy, onScan, onAddManually, onOpen }: Props) {
+export function SupplementsScreen({ supplements, busy, onScan, onAddManually, onOpen, onPick }: Props) {
   const { totals, warnings } = assessStack(supplements);
+  const [query, setQuery] = useState('');
+  const results = query.trim().length >= 2 ? searchSupplements(query) : [];
 
   return (
     <ScrollView contentContainerStyle={styles.container}>
       <Button label={busy ? 'Haetaan tietoja…' : '📷 Skannaa lisäravinne'} onPress={onScan} disabled={busy} />
       {busy && <ActivityIndicator />}
+      {supplementDbSize > 0 && (
+        <TextInput
+          value={query}
+          onChangeText={setQuery}
+          placeholder={`Hae nimellä (${supplementDbSize} tuotetta), esim. puhdas magnesium`}
+          style={styles.search}
+          placeholderTextColor={colors.muted}
+        />
+      )}
+      {results.map((m, i) => (
+        <Pressable
+          key={`${m.name}-${i}`}
+          style={styles.result}
+          onPress={() => {
+            setQuery('');
+            onPick(m);
+          }}
+        >
+          <Text style={styles.itemName}>{m.name}</Text>
+          <Text style={styles.small}>{[m.brand, m.shop].filter(Boolean).join(' · ')}</Text>
+        </Pressable>
+      ))}
+      {query.trim().length >= 2 && results.length === 0 && <Text style={styles.small}>Ei osumia tietokannasta.</Text>}
       <Pressable onPress={onAddManually}>
         <Text style={styles.link}>Lisää ilman viivakoodia</Text>
       </Pressable>
@@ -96,6 +124,8 @@ export function SupplementsScreen({ supplements, busy, onScan, onAddManually, on
 
 const styles = StyleSheet.create({
   container: { padding: 16, gap: 14, paddingBottom: 40 },
+  search: { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, borderRadius: 12, padding: 12, fontSize: 16, color: colors.text },
+  result: { backgroundColor: colors.surface, borderRadius: 10, padding: 12 },
   link: { fontSize: 15, color: colors.primary, fontWeight: '600', textAlign: 'center', padding: 4 },
   empty: { fontSize: 15, color: colors.muted, lineHeight: 21, textAlign: 'center', marginTop: 12 },
   section: { backgroundColor: colors.surface, borderRadius: 12, padding: 14, gap: 8 },
