@@ -24,7 +24,15 @@ If Open Food Facts has no ingredient list, the app looks the product up on **S-k
 
 Lactose-free products are recognised from the name, from labels and from product lines (Eila, PROfeel). If the package says *laktoositon* but the app missed it, tap **Pakkauksessa lukee: laktoositon**. The app remembers it for that product.
 
-If a product is still not found, type the ingredient list from the package. It is saved for that barcode, so the next scan gives the answer straight away. Products you add to Open Food Facts yourself also help other users.
+If a product is still not found, type the ingredient list from the package.
+
+**Lisäravinteet (supplements):**
+- Scan each supplement once. The vitamin and mineral table is read from the store pages, or from a photo of the label.
+- The tab adds up your daily intake across all products and compares it to EU reference intakes and EFSA safe upper limits.
+- It flags duplicates, IBS-unfriendly ingredients (sorbitol, xylitol, high-dose magnesium or vitamin C) and common timing conflicts such as calcium with iron.
+- It warns when a pack is about to run out.
+- Before you add a new product, it shows what adding it would change ("Jos lisäät tämän pinoosi").
+- All checks are fixed rules, with no AI and no paid services. It is saved for that barcode, so the next scan gives the answer straight away. Products you add to Open Food Facts yourself also help other users.
 
 **Personal settings:** in *Asetukset* you can mark FODMAP groups you tolerate (e.g. lactose), and on any product you can tap 👍/👎 to record your own experience.
 

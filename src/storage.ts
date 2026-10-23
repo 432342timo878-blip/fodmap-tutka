@@ -3,6 +3,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Verdict } from './analysis/analyze';
 import { fetchProduct, NotFoundError, Product } from './api/openFoodFacts';
 import { FodmapGroup } from './data/ingredients';
+import type { Supplement } from './supplements/assess';
 
 export type Override = 'ok' | 'bad';
 
@@ -23,6 +24,7 @@ const KEYS = {
   history: 'history',
   settings: 'settings',
   overrides: 'overrides',
+  supplements: 'supplements',
 };
 
 const HISTORY_LIMIT = 300;
@@ -122,4 +124,12 @@ export async function setOverride(barcode: string, value: Override | null): Prom
   if (value) overrides[barcode] = value;
   else delete overrides[barcode];
   await writeJson(KEYS.overrides, overrides);
+}
+
+export async function getSupplements(): Promise<Supplement[]> {
+  return readJson<Supplement[]>(KEYS.supplements, []);
+}
+
+export async function saveSupplements(supplements: Supplement[]): Promise<void> {
+  await writeJson(KEYS.supplements, supplements);
 }

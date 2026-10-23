@@ -55,6 +55,8 @@ export interface StoreProduct {
   name?: string;
   ingredients?: string;
   nutritionText?: string;
+  /** Tuotealueen koko teksti (lisäravinteiden vitamiinitaulukko voi olla tuotekuvauksessa). */
+  pageText?: string;
   heartSymbol: boolean;
   url: string;
 }
@@ -79,7 +81,7 @@ export function extractionScript(store: Store, ean: string): string {
   function session(k, v) { try { if (v === undefined) return sessionStorage.getItem(k); sessionStorage.setItem(k, v); } catch (e) { return null; } }
   var HEADINGS = /^(ainesosat|ainekset|raaka-aineet|ravintosisältö|ravintoarvot|ravintoarvo|tuotetiedot|valmistusmaa|alkuperämaa|säilytys|käyttöohje|allergeenit|valmistaja|lisätiedot|tuotekuvaus|pakkaus|kuvaus|hinta)/i;
   var INGREDIENTS = /^(ainesosat|ainekset|raaka-aineet|ainesosaluettelo)\\s*:?\\s*(.*)$/i;
-  var NUTRITION = /^(ravintosisältö|ravintoarvot|ravintoarvo|ravintoaineet)/i;
+  var NUTRITION = /^(ravintosisältö|ravintoarvot|ravintoarvo|ravintoaineet|ravintoainesisältö|vaikuttavat aineet|päivittäisannos|päiväannos|vuorokausiannos)/i;
 
   function lines() { return (document.body.innerText || '').split('\\n').map(clean).filter(Boolean); }
 
@@ -161,6 +163,7 @@ export function extractionScript(store: Store, ean: string): string {
           name: h1 ? clean(h1.innerText) : undefined,
           ingredients: ingredients || undefined,
           nutritionText: nutritionFromText(ls) || undefined,
+          pageText: clean(area.innerText).slice(0, 8000),
           heartSymbol: /sydänmerkki/i.test(area.innerText || '') || !!area.querySelector('img[alt*="ydänmerk"], img[alt*="ydanmerk"]'),
           url: location.href,
         });
@@ -193,17 +196,19 @@ export function parseMessage(e: WebViewMessageEvent, store: StoreId): StoreMessa
 
 interface LookupProps {
   barcode: string;
-  /** Kutsutaan kerran: ensimmäinen kauppa, josta ainesosat löytyvät, tai notFound kun kaikki ovat vastanneet. */
+  /** Kelpaako kaupan vastaus (esim. löytyikö ainesosaluettelo). */
+  accept: (product: StoreProduct) => boolean;
+  /** Kutsutaan kerran: ensimmäinen kelpaava vastaus, tai notFound kun kaikki kaupat ovat vastanneet. */
   onResult: (message: StoreMessage) => void;
 }
 
 /** Hakee tuotetta kaikista kaupoista yhtä aikaa näkymättömillä selaimilla. */
-export function StoreLookup({ barcode, onResult }: LookupProps) {
+export function StoreLookup({ barcode, accept, onResult }: LookupProps) {
   const done = useRef(false);
   const failed = useRef(new Set<StoreId>());
   const handle = (message: StoreMessage) => {
     if (done.current) return;
-    if (message.type === 'product' && message.ingredients) {
+    if (message.type === 'product' && accept(message)) {
       done.current = true;
       onResult(message);
       return;

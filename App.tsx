@@ -17,18 +17,25 @@ import { HistoryScreen } from './src/screens/HistoryScreen';
 import { IngredientsScreen } from './src/screens/IngredientsScreen';
 import { ScanScreen } from './src/screens/ScanScreen';
 import { SettingsScreen } from './src/screens/SettingsScreen';
+import { SupplementEditScreen } from './src/screens/SupplementEditScreen';
+import { SupplementsScreen } from './src/screens/SupplementsScreen';
+import { scanBarcodeOnce } from './src/scanner';
+import { Supplement } from './src/supplements/assess';
+import { parseSupplementText } from './src/supplements/nutrients';
 import { StoreBrowserScreen } from './src/screens/StoreBrowserScreen';
 import {
   addToHistory,
   getCachedProduct,
   getOverrides,
   getSettings,
+  getSupplements,
   HistoryItem,
   lookupProduct,
   Override,
   saveManualProduct,
   saveProduct,
   saveSettings,
+  saveSupplements,
   setOverride,
   Settings,
 } from './src/storage';
@@ -36,13 +43,14 @@ import { colors } from './src/theme';
 import { useKeyboardHeight } from './src/useKeyboardHeight';
 import heartSymbolData from './src/data/sydanmerkki.json';
 
-type Tab = 'scan' | 'history' | 'check' | 'settings';
+type Tab = 'scan' | 'supplements' | 'history' | 'check' | 'settings';
 
 type Overlay =
   | { kind: 'result'; product?: Product; text?: string; offline?: boolean; back: Tab }
   | { kind: 'ingredients'; barcode: string; name?: string; text?: string; back: Tab }
   | { kind: 'stores'; barcode: string; back: Tab }
-  | { kind: 'heartGroup'; product: Product; back: Tab };
+  | { kind: 'heartGroup'; product: Product; back: Tab }
+  | { kind: 'supplementEdit'; draft: Supplement; isNew: boolean; needsLabel?: boolean; back: Tab };
 
 /** Automaattinen verkkokauppahaku saa kestää tämän verran ennen kuin luovutetaan. */
 const STORE_LOOKUP_TIMEOUT_MS = 25000;
@@ -65,6 +73,7 @@ function heartSymbolSource(product?: Product): string | null {
 
 const TABS: { id: Tab; label: string; icon: string }[] = [
   { id: 'scan', label: 'Skannaa', icon: '📷' },
+  { id: 'supplements', label: 'Lisäravinteet', icon: '💊' },
   { id: 'history', label: 'Historia', icon: '🕘' },
   { id: 'check', label: 'Tarkista', icon: '✍️' },
   { id: 'settings', label: 'Asetukset', icon: '⚙️' },
@@ -85,13 +94,21 @@ function Main() {
   const [tab, setTab] = useState<Tab>('scan');
   const [overlay, setOverlay] = useState<Overlay | null>(null);
   const [busy, setBusy] = useState(false);
-  const [storeLookup, setStoreLookup] = useState<{ barcode: string; partial?: Product; offline?: boolean } | null>(null);
+  const [storeLookup, setStoreLookup] = useState<{
+    barcode: string;
+    /** Ruoka: ainesosat FODMAP-arvioon. Lisäravinne: vitamiinitaulukko pinoon. */
+    purpose: 'food' | 'supplement';
+    partial?: Product;
+    offline?: boolean;
+  } | null>(null);
+  const [supplements, setSupplements] = useState<Supplement[]>([]);
   const [settings, setSettings] = useState<Settings>({ tolerated: [] });
   const [overrides, setOverrides] = useState<Record<string, Override>>({});
 
   useEffect(() => {
     getSettings().then(setSettings);
     getOverrides().then(setOverrides);
+    getSupplements().then(setSupplements);
   }, []);
 
   const closeOverlay = () => {
@@ -133,7 +150,7 @@ function Main() {
       } else {
         // Ainesosat puuttuvat Open Food Factsista – kokeillaan verkkokauppoja (busy jatkuu).
         const partial = 'notFound' in result ? undefined : result.product;
-        setStoreLookup({ barcode, partial, offline: 'notFound' in result ? undefined : result.offline });
+        setStoreLookup({ barcode, purpose: 'food', partial, offline: 'notFound' in result ? undefined : result.offline });
       }
     } catch {
       setBusy(false);
@@ -165,6 +182,25 @@ function Main() {
     const lookup = storeLookup;
     if (!lookup) return;
     setStoreLookup(null);
+    if (lookup.purpose === 'supplement') {
+      setBusy(false);
+      const found = message.type === 'product' ? message : undefined;
+      const label = parseSupplementText(`${found?.nutritionText ?? ''}\n${found?.pageText ?? ''}`);
+      const hasLabel = Object.keys(label.amounts).length > 0;
+      openNewSupplement(
+        {
+          barcode: lookup.barcode,
+          name: lookup.partial?.name ?? found?.name ?? '',
+          brand: lookup.partial?.brand,
+          ingredientsText: lookup.partial?.ingredientsText ?? found?.ingredients,
+          amounts: label.amounts,
+          doseUnits: label.doseUnits ?? 1,
+          unitsPerDay: label.doseUnits ?? 1,
+        },
+        !hasLabel,
+      );
+      return;
+    }
     try {
       if (message.type === 'product' && message.ingredients) {
         await showProduct(await saveStoreProduct(lookup.barcode, message, lookup.partial), 'scan');
@@ -204,6 +240,51 @@ function Main() {
   const changeSettings = (next: Settings) => {
     setSettings(next);
     saveSettings(next);
+  };
+
+  const openNewSupplement = (fields: Omit<Supplement, 'id'>, needsLabel: boolean) => {
+    const draft: Supplement = { ...fields, id: `${Date.now()}` };
+    setOverlay({ kind: 'supplementEdit', draft, isNew: true, needsLabel, back: 'supplements' });
+  };
+
+  const scanSupplement = async () => {
+    let barcode: string | null;
+    try {
+      barcode = await scanBarcodeOnce();
+    } catch {
+      Alert.alert('Viivakoodinlukija ei käynnistynyt', 'Lisää lisäravinne ilman viivakoodia ja kuvaa sen vitamiinitaulukko.');
+      return;
+    }
+    if (!barcode) return;
+    const existing = supplements.find((s) => s.barcode === barcode);
+    if (existing) {
+      setOverlay({ kind: 'supplementEdit', draft: existing, isNew: false, back: 'supplements' });
+      return;
+    }
+    setBusy(true);
+    // Nimi ja ainesosat Open Food Factsista, vitamiinitaulukko verkkokaupoista.
+    let partial: Product | undefined;
+    try {
+      const result = await lookupProduct(barcode);
+      if (!('notFound' in result)) partial = result.product;
+    } catch {
+      // Verkkokaupat yritetään silti.
+    }
+    setStoreLookup({ barcode, purpose: 'supplement', partial });
+  };
+
+  const saveSupplement = async (s: Supplement) => {
+    const next = supplements.some((x) => x.id === s.id) ? supplements.map((x) => (x.id === s.id ? s : x)) : [...supplements, s];
+    setSupplements(next);
+    await saveSupplements(next);
+    closeOverlay();
+  };
+
+  const deleteSupplement = async (id: string) => {
+    const next = supplements.filter((x) => x.id !== id);
+    setSupplements(next);
+    await saveSupplements(next);
+    closeOverlay();
   };
 
   const analysis = useMemo(() => {
@@ -304,6 +385,30 @@ function Main() {
         onCancel={() => setOverlay({ kind: 'result', product, back })}
       />
     );
+  } else if (overlay?.kind === 'supplementEdit') {
+    const { draft } = overlay;
+    content = (
+      <SupplementEditScreen
+        key={draft.id}
+        draft={draft}
+        others={supplements.filter((x) => x.id !== draft.id)}
+        isNew={overlay.isNew}
+        needsLabel={overlay.needsLabel}
+        onSave={saveSupplement}
+        onDelete={overlay.isNew ? undefined : () => deleteSupplement(draft.id)}
+        onCancel={closeOverlay}
+      />
+    );
+  } else if (tab === 'supplements') {
+    content = (
+      <SupplementsScreen
+        supplements={supplements}
+        busy={busy}
+        onScan={scanSupplement}
+        onAddManually={() => openNewSupplement({ name: '', amounts: {}, doseUnits: 1, unitsPerDay: 1 }, true)}
+        onOpen={(s) => setOverlay({ kind: 'supplementEdit', draft: s, isNew: false, back: 'supplements' })}
+      />
+    );
   } else if (tab === 'scan') {
     content = <ScanScreen busy={busy} onBarcode={handleBarcode} launchRequest={launchRequest} />;
   } else if (tab === 'history') {
@@ -323,13 +428,26 @@ function Main() {
         <Text style={styles.headerTitle}>FODMAP-tutka</Text>
       </View>
       <View style={styles.content}>{content}</View>
-      {storeLookup && <StoreLookup key={storeLookup.barcode} barcode={storeLookup.barcode} onResult={finishStoreLookup} />}
+      {storeLookup && (
+        <StoreLookup
+          key={storeLookup.barcode}
+          barcode={storeLookup.barcode}
+          accept={(p) =>
+            storeLookup.purpose === 'food'
+              ? !!p.ingredients
+              : Object.keys(parseSupplementText(`${p.nutritionText ?? ''}\n${p.pageText ?? ''}`).amounts).length > 0
+          }
+          onResult={finishStoreLookup}
+        />
+      )}
       {!overlay && !keyboardOpen && (
         <View style={styles.tabBar}>
           {TABS.map((t) => (
             <Pressable key={t.id} style={styles.tab} onPress={() => setTab(t.id)}>
               <Text style={styles.tabIcon}>{t.icon}</Text>
-              <Text style={[styles.tabLabel, tab === t.id && styles.tabLabelActive]}>{t.label}</Text>
+              <Text style={[styles.tabLabel, tab === t.id && styles.tabLabelActive]} numberOfLines={1} adjustsFontSizeToFit>
+                {t.label}
+              </Text>
             </Pressable>
           ))}
         </View>

@@ -24,3 +24,9 @@ export async function photographNutrition(): Promise<Nutrition | null> {
   const lines = await photographLines();
   return lines && parseNutritionText(lines.join('\n'));
 }
+
+/** Kuvaa minkä tahansa tekstin (esim. lisäravinteen vitamiinitaulukon) ja palauttaa sen. */
+export async function photographText(): Promise<string | null> {
+  const lines = await photographLines();
+  return lines && lines.join('\n');
+}

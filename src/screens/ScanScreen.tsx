@@ -1,8 +1,9 @@
-import { BarcodeScanningResult, BarcodeType, CameraView, useCameraPermissions } from 'expo-camera';
+import { BarcodeScanningResult, CameraView, useCameraPermissions } from 'expo-camera';
 import { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { Button } from '../components/Button';
+import { BARCODE_TYPES } from '../scanner';
 import { colors } from '../theme';
 
 interface Props {
@@ -12,7 +13,6 @@ interface Props {
   launchRequest: number;
 }
 
-const BARCODE_TYPES: BarcodeType[] = ['ean13', 'ean8', 'upc_a', 'upc_e'];
 
 /**
  * Viivakoodit luetaan ensisijaisesti Googlen omalla lukijalla (Play-palvelut), joka tarkentaa

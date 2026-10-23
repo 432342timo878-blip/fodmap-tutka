@@ -35,6 +35,7 @@ Run `npm test` and `npm run typecheck` before declaring any task done.
 - `src/data/sydanmerkki.json` – Sydänmerkki product names, refreshed by `scripts/fetch-sydanmerkki.mjs` in the APK workflow (the site has no barcodes, so products are matched by name).
 - `plugins/withScannerFixes.js` – Android config: R8 off (expo-camera looks up ML Kit by class name), Play Store package query, ML Kit model preload.
 - The APK is built by `.github/workflows/android-apk.yml`; the user installs it from the run's artifacts.
+- `src/supplements/` – supplement stack: nutrient reference intakes (EU RI) and upper limits (EFSA UL), label parsing (store pages, OCR), and rule-based stack checks (no AI, by the user's choice: no pay-per-use APIs).
 - UI text is Finnish.
 
 ## Building with EAS
