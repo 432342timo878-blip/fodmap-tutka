@@ -51,3 +51,16 @@ describe('ingredientsFromOcrLines', () => {
     expect(analyzeIngredients(text).findings.map((f) => f.entry.id)).toEqual(['maito']);
   });
 });
+
+describe('low-FODMAP claims', () => {
+  const bread = 'vehnäjauho, vesi, kaurahiutale, pellavansiemen, rypsiöljy, durumvehnä, hiiva, ohramallasuute, suola, merileväjauhe';
+
+  it('trusts a low-FODMAP product line over the ingredient list', () => {
+    expect(analyzeIngredients(bread).verdict).toBe('red');
+    const r = analyzeIngredients(bread, { productName: 'Fazer Vatsaystävällinen Pehmeä vehnä-kaura-pellava leipä' });
+    expect(r.certifiedLowFodmap).toBe(true);
+    expect(r.verdict).toBe('green');
+    expect(r.unrecognized).toEqual([]);
+    expect(analyzeIngredients(bread, { productName: 'Leipä en:low-fodmap' }).verdict).toBe('green');
+  });
+});

@@ -25,6 +25,8 @@ export interface Analysis {
   unrecognized: string[];
   ingredientCount: number;
   lactoseFree: boolean;
+  /** Valmistaja tai sertifikaatti ilmoittaa tuotteen vähä-FODMAP:ksi. */
+  certifiedLowFodmap: boolean;
 }
 
 export interface AnalysisOptions {
@@ -137,6 +139,9 @@ function judge(entry: IngredientEntry, index: number, percent: number | undefine
 }
 
 // Laktoosittomuus voi lukea nimessä, merkinnöissä (OFF: en:lactose-free) tai tuotesarjassa (Valio Eila, PROfeel).
+// Ainesosaluettelo ei kerro valmistustavasta: entsyymit ja pitkä hapatus hajottavat vehnän
+// fruktaaneja (esim. Fazerin Vatsaystävälliset leivät). Merkintä ohittaa luettelon perusteella tehdyn arvion.
+const LOW_FODMAP_CLAIM = /vatsaystävällinen|vatsaystävälli|low[- ]?fodmap|fodmap[- ]?friendly|fodmap[- ]?ystävällinen|vähä[- ]?fodmap|monash/;
 const LACTOSE_FREE = /laktoositon|laktoosittom|laktaasi|vähälaktoosi|lactose[- ]free|no-lactose|laktosfri|lactofree|zero lactose|(^|[^a-zåäö])(eila|profeel)([^a-zåäö]|$)/;
 /** Juoksete päätason luettelossa tarkoittaa, että tuote on juustoa tai rahkaa. */
 const RENNET_MARKERS = ['juoksete', 'juoksute', 'juoksutin', 'rennet', 'löpe'];
@@ -153,6 +158,7 @@ export function analyzeIngredients(ingredientText: string | undefined | null, op
 
   const haystack = normalize(`${options.productName ?? ''} ${ingredientText ?? ''}`);
   const lactoseFree = LACTOSE_FREE.test(haystack);
+  const certifiedLowFodmap = LOW_FODMAP_CLAIM.test(normalize(options.productName ?? ''));
   const isCheeseOrQuark = segments.some((seg) => RENNET_MARKERS.some((m) => seg.text.includes(m)));
   const isHardCheese =
     isCheeseOrQuark && matchText(normalize(options.productName ?? '')).some((en) => en.id === 'juusto');
@@ -174,7 +180,10 @@ export function analyzeIngredients(ingredientText: string | undefined | null, op
     for (const entry of entries) {
       let { severity, reason } = judge(entry, segment.index, percent);
       let isTolerated = false;
-      if (severity !== 'ok' && lactoseFree && entry.groups.length > 0 && entry.groups.every((g) => g === 'laktoosi')) {
+      if (severity !== 'ok' && certifiedLowFodmap) {
+        severity = 'ok';
+        reason = 'Tuote on merkitty vähä-FODMAP-tuotteeksi – valmistustapa vähentää FODMAPeja.';
+      } else if (severity !== 'ok' && lactoseFree && entry.groups.length > 0 && entry.groups.every((g) => g === 'laktoosi')) {
         severity = 'ok';
         reason = 'Tuote on laktoositon.';
       } else if (severity !== 'ok' && isCheeseOrQuark && MILK_ENTRY_IDS.has(entry.id)) {
@@ -248,5 +257,6 @@ export function analyzeIngredients(ingredientText: string | undefined | null, op
     unrecognized: unique(unrecognized),
     ingredientCount: segments.length,
     lactoseFree,
+    certifiedLowFodmap,
   };
 }

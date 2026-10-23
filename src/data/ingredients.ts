@@ -235,6 +235,7 @@ export const INGREDIENTS: IngredientEntry[] = [
     { note: 'Kookosmaito ja -hiutaleet ovat vähä-FODMAP kohtuullisina annoksina.' }),
   e('pahkinat-low', 'Pähkinät (vähä-FODMAP)', 'low', [],
     ['maapähkinä', 'saksanpähkinä', 'pekaani', 'macadamia', 'parapähkinä', 'hasselpähkinä', 'pinjansiemen', 'peanut', 'walnut', 'pecan', 'hazelnut', 'brazil nut', 'jordnöt', 'valnöt', 'hasselnöt']),
+  e('merilevä', 'Merilevä', 'low', [], ['merilevä', 'levä', 'nori', 'wakame', 'kombu', 'kelp', 'seaweed', 'spirulina', 'chlorella', 'sjögräs', 'alg']),
   e('siemenet', 'Siemenet', 'low', [],
     ['chia', 'pellava', 'auringonkukansiemen', 'kurpitsansiemen', 'seesami', 'hamppu', 'sunflower', 'pumpkin seed', 'sesam', 'linseed', 'flax']),
 

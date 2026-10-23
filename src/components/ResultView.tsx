@@ -75,6 +75,16 @@ export function ResultView({
         </View>
       )}
 
+      {analysis.certifiedLowFodmap && (
+        <View style={[styles.override, { borderColor: colors.green }]}>
+          <Text style={styles.overrideText}>✓ Merkitty vähä-FODMAP-tuotteeksi</Text>
+          <Text style={styles.small}>
+            Valmistaja ilmoittaa tuotteen vähä-FODMAP:ksi (esim. Vatsaystävällinen, Low FODMAP, FODMAP Friendly). Valmistustapa, kuten
+            entsyymikäsittely tai pitkä hapatus, hajottaa FODMAPeja, vaikka ainesosissa olisi vehnää.
+          </Text>
+        </View>
+      )}
+
       {analysis.findings.length > 0 && (
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Huomioitavat ainesosat</Text>
