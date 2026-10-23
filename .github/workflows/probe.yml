@@ -1,4 +1,4 @@
-# Väliaikainen: hakee Sydänmerkin viralliset kriteerit. Poistetaan tutkimuksen jälkeen.
+# Väliaikainen: tutkii tietolähteitä. Poistetaan tutkimuksen jälkeen.
 name: Probe data sources
 on:
   push:
@@ -7,20 +7,30 @@ jobs:
   probe:
     runs-on: ubuntu-latest
     steps:
-      - name: Sydanmerkki criteria
-        run: |
-          curl -sL 'https://www.sydanmerkki.fi/sydanmerkki/millainen-tuote-saa-sydanmerkin' -o c.html
-          grep -o -i '<a[^>]*>[^<]*\(täältä\|kriteerit\)[^<]*</a>' c.html | sort -u | head
-          grep -o -i 'href="[^"]*kriteer[^"]*"' c.html | sort -u
-          for u in $(grep -o -i 'href="[^"]*kriteer[^"]*"' c.html | sed 's/href="//;s/"$//' | sort -u | head -3); do
-            echo "=== $u"; curl -sL "$u" -o k.html -w 'status %{http_code}\n'
-            grep -o -i 'href="[^"]*\.\(pdf\|xlsx\|docx\)[^"]*"' k.html | sort -u | head
-          done
-      - name: Criteria document text
+      - name: Sydanmerkki criteria page
         run: |
           sudo apt-get install -y -qq poppler-utils >/dev/null 2>&1 || true
-          curl -sL 'https://www.sydanmerkki.fi/sydanmerkki/millainen-tuote-saa-sydanmerkin' -o c.html
-          for u in $(grep -o -i 'href="[^"]*kriteer[^"]*"' c.html | sed 's/href="//;s/"$//' | sort -u | head -3); do curl -sL "$u" >> k.html; done
-          P=$(grep -o -i 'href="[^"]*\.pdf[^"]*"' k.html | sed 's/href="//;s/"$//;s/&amp;/\&/g' | grep -i 'kriteer\|criteria\|sydanmerk' | head -1)
-          echo "PDF: $P"
-          if [ -n "$P" ]; then curl -sL "$P" -o k.pdf && pdftotext -layout k.pdf k.txt && wc -l k.txt && cat k.txt | head -400; fi
+          curl -sL 'https://www.sydanmerkki.fi/elintarviketeollisuus/tuotteiden_myontamisperusteet' -o k.html -w 'status %{http_code}\n'
+          grep -o -i 'href="[^"]*\.\(pdf\|xlsx\)[^"]*"' k.html | sort -u | head -20
+          python3 - <<'PY'
+          import re,html
+          s=open('k.html',encoding='utf-8',errors='ignore').read()
+          s=re.sub(r'(?s)<(script|style|nav|header|footer)[^>]*>.*?</\1>',' ',s)
+          t=html.unescape(re.sub(r'<[^>]+>','\n',s))
+          lines=[l.strip() for l in t.split('\n') if l.strip()]
+          print('\n'.join(lines)[:5000])
+          PY
+          for P in $(grep -o -i 'href="[^"]*\.pdf[^"]*"' k.html | sed 's/href="//;s/"$//;s/&amp;/\&/g' | sort -u | head -3); do
+            echo "##### PDF $P"; curl -sL "$P" -o k.pdf && pdftotext -layout k.pdf - | head -700
+          done
+      - name: Open Food Facts product
+        run: |
+          curl -s -A 'FODMAP-tutka/1.0 (personal use)' 'https://world.openfoodfacts.org/api/v2/product/6430056590875.json?fields=product_name,ingredients_text_fi,ingredients_text,ingredients_text_en,nutriments,categories_tags' -w '\nstatus %{http_code}\n' | head -c 3000
+      - name: K-ruoka and Tokmanni
+        run: |
+          UA='Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130 Mobile Safari/537.36'
+          for u in 'https://www.k-ruoka.fi/haku?q=6408430000258' 'https://www.tokmanni.fi/catalogsearch/result/?q=6430056590875' 'https://www.tokmanni.fi/haku?q=6430056590875'; do
+            echo "=== $u"; curl -sL -A "$UA" "$u" -o p.html -w 'status %{http_code} size %{size_download} url %{url_effective}\n'
+            grep -o 'href="[^"]*\(tuote\|product\|\.html\)[^"]*"' p.html | sort -u | head -8
+            grep -o -i '.\{100\}ainesosat.\{200\}' p.html | head -2
+          done
