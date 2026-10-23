@@ -17,6 +17,17 @@ describe('parseSupplementText', () => {
     });
   });
 
+  it('reads the lines collected from a health-store product page', () => {
+    const lines = [
+      'Suositeltu vuorokausiannos: 1 - 4 kapselia tarvittaessa noin tunti ennen nukkumaanmenoa.',
+      'Life Magnesium Boost on vahva magnesiumvalmiste, josta saat 350 mg helposti imeytyvää magnesiumia',
+      'magnesium 125 mg (33% päivittäisestä tarpeesta)',
+      'magnesium 125 mg (33% av daglig rekommenderad dos)',
+      'L-tryptofaani 50 mg',
+    ].join('\n');
+    expect(parseSupplementText(lines).amounts).toEqual({ magnesium: 125 });
+  });
+
   it('converts IU and units, and sums EPA and DHA', () => {
     expect(parseSupplementText('Vitamin D3 2000 IU').amounts.vitD).toBe(50);
     expect(parseSupplementText('Magnesium 0,3 g').amounts.magnesium).toBe(300);

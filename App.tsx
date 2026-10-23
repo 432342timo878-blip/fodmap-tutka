@@ -24,6 +24,7 @@ import { SupplementEditScreen } from './src/screens/SupplementEditScreen';
 import { SupplementsScreen } from './src/screens/SupplementsScreen';
 import { scanBarcodeOnce } from './src/scanner';
 import { Supplement } from './src/supplements/assess';
+import { findSupplement } from './src/supplements/database';
 import { isSupplementLabel, parseSupplementText } from './src/supplements/nutrients';
 import { StoreBrowserScreen } from './src/screens/StoreBrowserScreen';
 import {
@@ -50,10 +51,10 @@ type Tab = 'scan' | 'supplements' | 'history' | 'check' | 'settings';
 
 type Overlay =
   | { kind: 'result'; product?: Product; text?: string; offline?: boolean; back: Tab }
-  | { kind: 'ingredients'; barcode: string; name?: string; text?: string; back: Tab }
+  | { kind: 'ingredients'; barcode: string; name?: string; text?: string; lookupInfo?: string; back: Tab }
   | { kind: 'stores'; barcode: string; back: Tab }
   | { kind: 'heartGroup'; product: Product; back: Tab }
-  | { kind: 'supplementEdit'; draft: Supplement; isNew: boolean; needsLabel?: boolean; back: Tab }
+  | { kind: 'supplementEdit'; draft: Supplement; isNew: boolean; needsLabel?: boolean; lookupInfo?: string; back: Tab }
   /** Jaettua sivua tai kuvaa luetaan. */
   | { kind: 'reading'; url?: string; subject?: string; back: Tab };
 
@@ -208,6 +209,7 @@ function Main() {
           unitsPerDay: label.doseUnits ?? 1,
         },
         !hasLabel,
+        found ? `Tiedot: ${STORE_BY_ID[found.store as keyof typeof STORE_BY_ID]?.name ?? 'verkkosivu'}` : `Haku verkkokaupoista: ${message.type === 'notFound' ? message.reason : ''}`,
       );
       return;
     }
@@ -217,7 +219,12 @@ function Main() {
       } else if (lookup.partial) {
         await showProduct(lookup.partial, 'scan', lookup.offline);
       } else {
-        setOverlay({ kind: 'ingredients', barcode: lookup.barcode, back: 'scan' });
+        setOverlay({
+          kind: 'ingredients',
+          barcode: lookup.barcode,
+          lookupInfo: message.type === 'notFound' ? `Open Food Facts: ei ainesosia · ${message.reason}` : undefined,
+          back: 'scan',
+        });
       }
     } finally {
       setBusy(false);
@@ -252,9 +259,9 @@ function Main() {
     saveSettings(next);
   };
 
-  const openNewSupplement = (fields: Omit<Supplement, 'id'>, needsLabel: boolean) => {
+  const openNewSupplement = (fields: Omit<Supplement, 'id'>, needsLabel: boolean, lookupInfo?: string) => {
     const draft: Supplement = { ...fields, id: `${Date.now()}` };
-    setOverlay({ kind: 'supplementEdit', draft, isNew: true, needsLabel, back: 'supplements' });
+    setOverlay({ kind: 'supplementEdit', draft, isNew: true, needsLabel, lookupInfo, back: 'supplements' });
   };
 
   const scanSupplement = async () => {
@@ -269,6 +276,24 @@ function Main() {
     const existing = supplements.find((s) => s.barcode === barcode);
     if (existing) {
       setOverlay({ kind: 'supplementEdit', draft: existing, isNew: false, back: 'supplements' });
+      return;
+    }
+    // Ensin sovelluksen oma terveyskauppatietokanta: nopea ja toimii ilman verkkoa.
+    const known = findSupplement(barcode);
+    if (known && Object.keys(known.label.amounts).length > 0) {
+      openNewSupplement(
+        {
+          barcode,
+          name: known.name,
+          brand: known.brand,
+          ingredientsText: known.ingredients,
+          amounts: known.label.amounts,
+          doseUnits: known.label.doseUnits ?? 1,
+          unitsPerDay: known.label.doseUnits ?? 1,
+        },
+        false,
+        `Tiedot: ${known.shop} (sovelluksen tietokanta). Tarkista annoskoko pakkauksesta.`,
+      );
       return;
     }
     setBusy(true);
@@ -425,6 +450,7 @@ function Main() {
         barcode={overlay.barcode}
         initialName={overlay.name}
         initialText={overlay.text}
+        lookupInfo={overlay.lookupInfo}
         onSubmit={(name, text) => submitIngredients(overlay.barcode, name, text, overlay.back)}
         onSearchStores={() => setOverlay({ kind: 'stores', barcode: overlay.barcode, back: overlay.back })}
         onCancel={closeOverlay}
@@ -474,6 +500,7 @@ function Main() {
         others={supplements.filter((x) => x.id !== draft.id)}
         isNew={overlay.isNew}
         needsLabel={overlay.needsLabel}
+        lookupInfo={overlay.lookupInfo}
         onSave={saveSupplement}
         onDelete={overlay.isNew ? undefined : () => deleteSupplement(draft.id)}
         onCancel={closeOverlay}

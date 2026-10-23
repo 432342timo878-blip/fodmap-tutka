@@ -14,9 +14,11 @@ interface Props {
   /** Avaa verkkokauppahaun sovelluksen sisällä. */
   onSearchStores?: (query: string) => void;
   onCancel?: () => void;
+  /** Miksi tuotetta ei löytynyt (kauppakohtaiset syyt). */
+  lookupInfo?: string;
 }
 
-export function IngredientsScreen({ barcode, initialName = '', initialText = '', onSubmit, onSearchStores, onCancel }: Props) {
+export function IngredientsScreen({ barcode, initialName = '', initialText = '', onSubmit, onSearchStores, onCancel, lookupInfo }: Props) {
   const [name, setName] = useState(initialName);
   const [text, setText] = useState(initialText);
   const [recognizing, setRecognizing] = useState(false);
@@ -46,6 +48,8 @@ export function IngredientsScreen({ barcode, initialName = '', initialText = '',
           ? `Viivakoodi ${barcode}. Kuvaa ainesosaluettelo pakkauksesta tai etsi tuote verkkokaupoista (S-kaupat, K-Ruoka, Tokmanni). Tiedot tallennetaan, joten seuraavalla kerralla tulos tulee heti.`
           : 'Kuvaa ainesosaluettelo pakkauksesta, tai kirjoita tai liitä se alle.'}
       </Text>
+
+      {lookupInfo && <Text style={styles.small}>{lookupInfo}</Text>}
 
       <Button label={recognizing ? 'Tunnistetaan tekstiä…' : '📷 Kuvaa ainesosaluettelo'} onPress={photograph} disabled={recognizing} />
       {recognizing && <ActivityIndicator />}

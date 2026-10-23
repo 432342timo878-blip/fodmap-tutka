@@ -15,6 +15,8 @@ interface Props {
   isNew: boolean;
   /** Etiketin tietoja ei löytynyt automaattisesti. */
   needsLabel?: boolean;
+  /** Mistä tiedot tulivat tai miksi niitä ei löytynyt. */
+  lookupInfo?: string;
   onSave: (s: Supplement) => void;
   onDelete?: () => void;
   onCancel: () => void;
@@ -26,7 +28,7 @@ const toNumber = (t: string) => {
   return Number.isFinite(n) ? n : undefined;
 };
 
-export function SupplementEditScreen({ draft, others, isNew, needsLabel, onSave, onDelete, onCancel }: Props) {
+export function SupplementEditScreen({ draft, others, isNew, needsLabel, lookupInfo, onSave, onDelete, onCancel }: Props) {
   const [name, setName] = useState(draft.name);
   const [doseUnits, setDoseUnits] = useState(toText(draft.doseUnits));
   const [unitsPerDay, setUnitsPerDay] = useState(toText(draft.unitsPerDay));
@@ -91,6 +93,7 @@ export function SupplementEditScreen({ draft, others, isNew, needsLabel, onSave,
       {needsLabel && (
         <Text style={styles.notice}>Vitamiinitaulukkoa ei löytynyt verkosta. Kuvaa pakkauksen taulukko, niin arvot täyttyvät.</Text>
       )}
+      {lookupInfo && <Text style={styles.small}>{lookupInfo}</Text>}
 
       <TextInput value={name} onChangeText={setName} placeholder="Nimi" style={styles.input} placeholderTextColor={colors.muted} />
 

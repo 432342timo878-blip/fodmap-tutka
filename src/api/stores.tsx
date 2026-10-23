@@ -189,6 +189,10 @@ export function extractionScript(store: Pick<Store, 'productPath' | 'resultLinks
 })(); true;`;
 }
 
+export function describeReasons(reasons: Map<PageSourceId, string>): string {
+  return STORES.map((s) => `${s.name}: ${reasons.get(s.id) ?? 'ei vastannut ajoissa'}`).join(' · ');
+}
+
 export function parseMessage(e: WebViewMessageEvent, store: PageSourceId): StoreMessage {
   try {
     return JSON.parse(e.nativeEvent.data) as StoreMessage;
@@ -208,7 +212,8 @@ interface LookupProps {
 /** Hakee tuotetta kaikista kaupoista yhtä aikaa näkymättömillä selaimilla. */
 export function StoreLookup({ barcode, accept, onResult }: LookupProps) {
   const done = useRef(false);
-  const failed = useRef(new Set<PageSourceId>());
+  // Miksi kustakin kaupasta ei löytynyt – näytetään käyttäjälle, ettei tarvitse arvailla.
+  const reasons = useRef(new Map<PageSourceId, string>());
   const handle = (message: StoreMessage) => {
     if (done.current) return;
     if (message.type === 'product' && accept(message)) {
@@ -216,10 +221,11 @@ export function StoreLookup({ barcode, accept, onResult }: LookupProps) {
       onResult(message);
       return;
     }
-    failed.current.add(message.store);
-    if (failed.current.size === STORES.length) {
+    if (reasons.current.has(message.store)) return;
+    reasons.current.set(message.store, message.type === 'notFound' ? message.reason : 'tuotesivulta ei löytynyt tietoja');
+    if (reasons.current.size === STORES.length) {
       done.current = true;
-      onResult({ type: 'notFound', store: message.store, reason: 'ei löytynyt mistään kaupasta' });
+      onResult({ type: 'notFound', store: message.store, reason: describeReasons(reasons.current) });
     }
   };
   return (

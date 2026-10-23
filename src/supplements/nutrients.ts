@@ -96,19 +96,24 @@ export interface ParsedLabel {
 
 /** Lukee lisäravinteen etiketin vitamiini- ja kivennäisainetaulukon. */
 export function parseSupplementText(raw: string): ParsedLabel {
-  const text = raw.toLowerCase().replace(/\s+/g, ' ');
+  const text = raw.toLowerCase().replace(/[ \t\u00a0]+/g, ' ');
   const amounts: NutrientAmounts = {};
 
   for (const def of NUTRIENTS) {
-    const re = new RegExp(def.label.source, 'g');
-    let m: RegExpExecArray | null;
-    while ((m = re.exec(text))) {
-      // Ainesosaluettelossa nimi esiintyy ilman määrää ("magnesiumsitraatti, ...") – kokeillaan seuraavaa.
-      const value = amountAfter(text, m.index + m[0].length, def);
-      if (value !== undefined) {
-        amounts[def.id] = value;
-        break;
+    // Ensin taulukkorivit, joissa nimi aloittaa rivin tai luettelon kohdan ("magnesium 125 mg");
+    // vasta sitten vapaa teksti ("magnesiumvalmiste, josta saat 350 mg" on mainosteksti).
+    const patterns = [new RegExp(`(?:^|\\n|[,;:|•(])\\s*(?:${def.label.source})`, 'g'), new RegExp(def.label.source, 'g')];
+    for (const re of patterns) {
+      let m: RegExpExecArray | null;
+      while ((m = re.exec(text))) {
+        // Ainesosaluettelossa nimi esiintyy ilman määrää ("magnesiumsitraatti, ...") – kokeillaan seuraavaa.
+        const value = amountAfter(text, m.index + m[0].length, def);
+        if (value !== undefined) {
+          amounts[def.id] = value;
+          break;
+        }
       }
+      if (amounts[def.id] !== undefined) break;
     }
   }
 

@@ -38,6 +38,31 @@ jobs:
         continue-on-error: true
         run: node scripts/fetch-sydanmerkki.mjs
 
+      # Lisäravinnetietokanta kerätään terveyskauppojen sivuilta enintään kerran viikossa.
+      - name: Week number
+        id: week
+        run: echo "week=$(date -u +%G-%V)" >> "$GITHUB_OUTPUT"
+
+      - name: Restore supplement database
+        id: supp-cache
+        uses: actions/cache/restore@v4
+        with:
+          path: src/data/supplements-db.json
+          key: supplements-db-${{ steps.week.outputs.week }}
+
+      - name: Update supplement database
+        id: supp-fetch
+        if: steps.supp-cache.outputs.cache-hit != 'true'
+        continue-on-error: true
+        run: node scripts/fetch-supplements.mjs
+
+      - name: Save supplement database
+        if: steps.supp-fetch.outcome == 'success'
+        uses: actions/cache/save@v4
+        with:
+          path: src/data/supplements-db.json
+          key: supplements-db-${{ steps.week.outputs.week }}
+
       - name: Test
         run: |
           npm test
