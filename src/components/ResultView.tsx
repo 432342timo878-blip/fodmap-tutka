@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { ReactNode, useState } from 'react';
 import { Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { Analysis, Finding } from '../analysis/analyze';
@@ -14,8 +14,8 @@ interface Props {
   analysis: Analysis;
   override?: Override;
   offline?: boolean;
-  /** Mistä Sydänmerkki pääteltiin, tai null jos merkkiä ei löytynyt. */
-  heartSymbol?: string | null;
+  /** Sydänmerkki-osio (virallinen merkki ja kriteeriarvio). */
+  heartSection?: ReactNode;
   onOverride?: (value: Override | null) => void;
   onEditIngredients?: () => void;
   /** Käyttäjä vahvistaa pakkauksesta, että tuote on laktoositon. */
@@ -30,7 +30,7 @@ export function ResultView({
   analysis,
   override,
   offline,
-  heartSymbol,
+  heartSection,
   onOverride,
   onEditIngredients,
   onMarkLactoseFree,
@@ -67,13 +67,6 @@ export function ResultView({
         </View>
       </View>
 
-      {heartSymbol && (
-        <View style={styles.heart}>
-          <Text style={styles.heartText}>❤️ Sydänmerkki</Text>
-          <Text style={styles.small}>{heartSymbol}</Text>
-        </View>
-      )}
-
       {override && (
         <View style={[styles.override, { borderColor: override === 'ok' ? colors.green : colors.red }]}>
           <Text style={styles.overrideText}>
@@ -104,6 +97,8 @@ export function ResultView({
       {analysis.unrecognized.length > 0 && (
         <Text style={styles.small}>Ei tunnistettu: {analysis.unrecognized.join(', ')}</Text>
       )}
+
+      {heartSection}
 
       {text ? (
         <Pressable onPress={() => setShowIngredients((v) => !v)} style={styles.section}>
@@ -148,6 +143,8 @@ export function ResultView({
 const SOURCE_LABEL: Record<Product['source'], string> = {
   off: ' · Open Food Facts',
   skaupat: ' · S-kaupat',
+  kruoka: ' · K-Ruoka',
+  tokmanni: ' · Tokmanni',
   manual: ' · oma merkintä',
 };
 
@@ -182,8 +179,6 @@ const styles = StyleSheet.create({
   verdictIcon: { fontSize: 40, fontWeight: '800', width: 44, textAlign: 'center' },
   verdictTitle: { fontSize: 21, fontWeight: '800' },
   verdictSubtitle: { fontSize: 14, color: colors.text, marginTop: 2 },
-  heart: { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: colors.surface, borderRadius: 10, padding: 10 },
-  heartText: { fontSize: 16, fontWeight: '700', color: colors.red },
   override: { borderWidth: 1, borderRadius: 10, padding: 10, backgroundColor: colors.surface },
   overrideText: { fontSize: 15, fontWeight: '600', color: colors.text },
   section: { backgroundColor: colors.surface, borderRadius: 12, padding: 14, gap: 12 },

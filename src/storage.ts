@@ -54,7 +54,12 @@ export async function lookupProduct(barcode: string): Promise<LookupResult> {
     const product: Product =
       !fetched.ingredientsText && cached?.ingredientsText
         ? { ...cached, fetchedAt: Date.now() }
-        : { ...fetched, lactoseFree: cached?.lactoseFree };
+        : {
+            ...fetched,
+            lactoseFree: cached?.lactoseFree,
+            heartGroup: cached?.heartGroup,
+            nutrition: fetched.nutrition ?? cached?.nutrition,
+          };
     await writeJson(KEYS.product(barcode), product);
     return { product };
   } catch (err) {

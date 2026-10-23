@@ -15,9 +15,12 @@ The app names the problem ingredients and explains why each one was flagged.
 3. The ingredient list is parsed (sub-ingredients in parentheses, percentages, "voi sisältää" trace warnings removed) and each ingredient is matched against `src/data/ingredients.ts`.
 4. Position and percentage are taken into account: EU ingredient lists are in descending order of weight, so wheat as the first ingredient is red while wheat late in the list is yellow.
 
-If Open Food Facts has no ingredient list, the app looks the product up on **S-kaupat.fi** in a hidden in-app browser. This is unofficial: S-kaupat has no public API, so it can stop working if their site changes. If that fails too, **photograph the ingredient list**. The text is recognised on the phone, and you can check and correct it before analysis. You can also open S-kaupat inside the app and read the ingredients from any product page.
+If Open Food Facts has no ingredient list, the app looks the product up on **S-kaupat, K-Ruoka and Tokmanni** at the same time, in hidden in-app browsers. This is unofficial: the stores have no public APIs, so it can stop working if their sites change. If that fails too, **photograph the ingredient list**. The text is recognised on the phone, and you can check and correct it before analysis. You can also open S-kaupat inside the app and read the ingredients from any product page.
 
-**Sydänmerkki** is shown when the S-kaupat page shows it, when Open Food Facts lists it, or when the product name matches the official Sydänmerkki product list. That list is refreshed from sydanmerkki.fi on every build.
+**Sydänmerkki**:
+- The app shows whether the product officially has the mark: from the store page, Open Food Facts, or a name match against the official list, which is refreshed from sydanmerkki.fi on every build.
+- It also checks whether the product **would meet** the Sydänmerkki criteria for its product group (fat, saturated fat, sugars, fibre, salt per 100 g). The product group is guessed from the name and categories, and you can change it.
+- Nutrition values come from Open Food Facts or the store page, or from a photo of the nutrition table.
 
 Lactose-free products are recognised from the name, from labels and from product lines (Eila, PROfeel). If the package says *laktoositon* but the app missed it, tap **Pakkauksessa lukee: laktoositon**. The app remembers it for that product.
 

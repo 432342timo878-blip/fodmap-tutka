@@ -126,6 +126,12 @@ describe('analyzeIngredients', () => {
     expect(analyzeIngredients('riisi, kvarkkimössö').unrecognized).toEqual(['kvarkkimössö']);
   });
 
+  it('does not read "raising agent" as raisins', () => {
+    const bite = 'Milk protein, raising agent (polydextrose), white chocolate coating (sweetener [maltitol], cocoa butter), salt';
+    expect(ids(bite)).not.toContain('rusina:caution');
+    expect(ids('oats, raisins, sugar')).toContain('rusina:caution');
+  });
+
   it('works on English fallback text', () => {
     expect(analyzeIngredients('wheat flour, sugar, onion powder').verdict).toBe('red');
     expect(analyzeIngredients('pineapple, sugar, rice').verdict).toBe('green');

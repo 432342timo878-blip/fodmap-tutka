@@ -1,5 +1,7 @@
 // Open Food Facts -tuotehaku viivakoodilla. Avoin tietokanta, ei API-avainta.
 // https://openfoodfacts.github.io/openfoodfacts-server/api/
+import { Nutrition, nutritionFromOff } from '../analysis/nutrition';
+import type { StoreId } from './stores';
 
 export interface Product {
   barcode: string;
@@ -9,12 +11,18 @@ export interface Product {
   ingredientsText?: string;
   /** Open Food Facts -merkinnät, esim. "en:lactose-free". */
   labels?: string[];
-  /** S-kaupat-sivulla näkyi Sydänmerkki. */
+  /** Open Food Facts -luokat yleisestä tarkkaan, esim. ["en:breads", "en:rye-breads"]. */
+  categories?: string[];
+  /** Ravintosisältö per 100 g. */
+  nutrition?: Nutrition;
+  /** Käyttäjän valitsema Sydänmerkki-tuoteryhmä (HEART_GROUPS id). */
+  heartGroup?: string;
+  /** Kaupan tuotesivulla näkyi Sydänmerkki. */
   heartSymbol?: boolean;
   /** Käyttäjä on vahvistanut pakkauksesta, että tuote on laktoositon. */
   lactoseFree?: boolean;
-  /** Mistä ainesosaluettelo on: Open Food Facts, S-kaupat vai käyttäjän kirjoittama/kuvaama. */
-  source: 'off' | 'skaupat' | 'manual';
+  /** Mistä ainesosaluettelo on: Open Food Facts, verkkokauppa vai käyttäjän kirjoittama/kuvaama. */
+  source: 'off' | StoreId | 'manual';
   fetchedAt: number;
 }
 
@@ -25,6 +33,8 @@ const FIELDS = [
   'brands',
   'image_front_small_url',
   'labels_tags',
+  'categories_tags',
+  'nutriments',
   'ingredients_text_fi',
   'ingredients_text_sv',
   'ingredients_text_en',
@@ -63,6 +73,8 @@ export async function fetchProduct(barcode: string): Promise<Product> {
     // Suomenkielinen luettelo ensin; ruotsi ja englanti varalla.
     ingredientsText: pick(p.ingredients_text_fi, p.ingredients_text_sv, p.ingredients_text_en, p.ingredients_text),
     labels: Array.isArray(p.labels_tags) ? p.labels_tags : undefined,
+    categories: Array.isArray(p.categories_tags) ? p.categories_tags : undefined,
+    nutrition: nutritionFromOff(p.nutriments),
     source: 'off',
     fetchedAt: Date.now(),
   };

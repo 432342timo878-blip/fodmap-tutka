@@ -4,15 +4,20 @@ import { Alert, BackHandler, Pressable, StyleSheet, Text, View } from 'react-nat
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { analyzeIngredients } from './src/analysis/analyze';
+import { assessHeartSymbol, classifyHeartGroup, HEART_GROUP_BY_ID } from './src/analysis/heartCriteria';
 import { createHeartSymbolMatcher } from './src/analysis/heartSymbol';
+import { hasNutrition, parseNutritionText } from './src/analysis/nutrition';
 import { Product } from './src/api/openFoodFacts';
-import { SKaupatFetcher, SKaupatMessage, SKaupatProduct } from './src/api/sKaupat';
+import { STORE_BY_ID, StoreLookup, StoreMessage, StoreProduct } from './src/api/stores';
+import { HeartSection } from './src/components/HeartSection';
 import { ResultView } from './src/components/ResultView';
+import { photographNutrition } from './src/ocr';
+import { HeartGroupScreen } from './src/screens/HeartGroupScreen';
 import { HistoryScreen } from './src/screens/HistoryScreen';
 import { IngredientsScreen } from './src/screens/IngredientsScreen';
 import { ScanScreen } from './src/screens/ScanScreen';
-import { SKaupatBrowserScreen } from './src/screens/SKaupatBrowserScreen';
 import { SettingsScreen } from './src/screens/SettingsScreen';
+import { StoreBrowserScreen } from './src/screens/StoreBrowserScreen';
 import {
   addToHistory,
   getCachedProduct,
@@ -36,10 +41,11 @@ type Tab = 'scan' | 'history' | 'check' | 'settings';
 type Overlay =
   | { kind: 'result'; product?: Product; text?: string; offline?: boolean; back: Tab }
   | { kind: 'ingredients'; barcode: string; name?: string; text?: string; back: Tab }
-  | { kind: 'skaupat'; barcode: string; back: Tab };
+  | { kind: 'stores'; barcode: string; back: Tab }
+  | { kind: 'heartGroup'; product: Product; back: Tab };
 
-/** Automaattinen S-kaupat-haku saa kestää tämän verran ennen kuin luovutetaan. */
-const S_KAUPAT_TIMEOUT_MS = 25000;
+/** Automaattinen verkkokauppahaku saa kestää tämän verran ennen kuin luovutetaan. */
+const STORE_LOOKUP_TIMEOUT_MS = 25000;
 
 const isHeartSymbolProduct = createHeartSymbolMatcher(heartSymbolData.products);
 
@@ -51,7 +57,7 @@ function productContext(product?: Product): string | undefined {
 
 function heartSymbolSource(product?: Product): string | null {
   if (!product) return null;
-  if (product.heartSymbol) return 'S-kaupat-sivun mukaan';
+  if (product.heartSymbol) return product.source in STORE_BY_ID ? `${STORE_BY_ID[product.source as keyof typeof STORE_BY_ID].name}-sivun mukaan` : 'Kaupan sivun mukaan';
   if (product.labels?.some((l) => /syd[aä]nmerk|heart-symbol/.test(l))) return 'Open Food Facts -merkinnän mukaan';
   if (isHeartSymbolProduct(`${product.brand ?? ''} ${product.name}`)) return 'Tuotenimi löytyy Sydänmerkki-tuotteiden listalta';
   return null;
@@ -79,7 +85,7 @@ function Main() {
   const [tab, setTab] = useState<Tab>('scan');
   const [overlay, setOverlay] = useState<Overlay | null>(null);
   const [busy, setBusy] = useState(false);
-  const [sKaupatLookup, setSKaupatLookup] = useState<{ barcode: string; partial?: Product; offline?: boolean } | null>(null);
+  const [storeLookup, setStoreLookup] = useState<{ barcode: string; partial?: Product; offline?: boolean } | null>(null);
   const [settings, setSettings] = useState<Settings>({ tolerated: [] });
   const [overrides, setOverrides] = useState<Record<string, Override>>({});
 
@@ -89,6 +95,9 @@ function Main() {
   }, []);
 
   const closeOverlay = () => {
+    // Alinäkymistä palataan edelliseen näkymään, muista välilehdelle.
+    if (overlay?.kind === 'heartGroup') return setOverlay({ kind: 'result', product: overlay.product, back: overlay.back });
+    if (overlay?.kind === 'stores') return setOverlay({ kind: 'ingredients', barcode: overlay.barcode, back: overlay.back });
     if (overlay) setTab(overlay.back);
     setOverlay(null);
   };
@@ -122,9 +131,9 @@ function Main() {
         await showProduct(result.product, 'scan', result.offline);
         setBusy(false);
       } else {
-        // Ainesosat puuttuvat Open Food Factsista – kokeillaan S-kauppoja (busy jatkuu).
+        // Ainesosat puuttuvat Open Food Factsista – kokeillaan verkkokauppoja (busy jatkuu).
         const partial = 'notFound' in result ? undefined : result.product;
-        setSKaupatLookup({ barcode, partial, offline: 'notFound' in result ? undefined : result.offline });
+        setStoreLookup({ barcode, partial, offline: 'notFound' in result ? undefined : result.offline });
       }
     } catch {
       setBusy(false);
@@ -135,28 +144,30 @@ function Main() {
     }
   };
 
-  /** Yhdistää S-kaupat-sivulta luetut tiedot aiempiin ja tallentaa ne. */
-  const saveSKaupatProduct = async (barcode: string, found: SKaupatProduct, partial?: Product | null) => {
+  /** Yhdistää verkkokaupan sivulta luetut tiedot aiempiin ja tallentaa ne. */
+  const saveStoreProduct = async (barcode: string, found: StoreProduct, partial?: Product | null) => {
+    const nutrition = found.nutritionText ? parseNutritionText(found.nutritionText) : undefined;
     const product: Product = {
       ...partial,
       barcode,
       name: found.name || partial?.name || 'Nimetön tuote',
-      ingredientsText: found.ingredients,
-      heartSymbol: found.heartSymbol || undefined,
-      source: 'skaupat',
+      ingredientsText: found.ingredients ?? partial?.ingredientsText,
+      nutrition: hasNutrition(nutrition) ? nutrition : partial?.nutrition,
+      heartSymbol: found.heartSymbol || partial?.heartSymbol || undefined,
+      source: found.ingredients ? found.store : (partial?.source ?? found.store),
       fetchedAt: Date.now(),
     };
     await saveProduct(product);
     return product;
   };
 
-  const finishSKaupatLookup = async (message: SKaupatMessage) => {
-    const lookup = sKaupatLookup;
+  const finishStoreLookup = async (message: StoreMessage) => {
+    const lookup = storeLookup;
     if (!lookup) return;
-    setSKaupatLookup(null);
+    setStoreLookup(null);
     try {
       if (message.type === 'product' && message.ingredients) {
-        await showProduct(await saveSKaupatProduct(lookup.barcode, message, lookup.partial), 'scan');
+        await showProduct(await saveStoreProduct(lookup.barcode, message, lookup.partial), 'scan');
       } else if (lookup.partial) {
         await showProduct(lookup.partial, 'scan', lookup.offline);
       } else {
@@ -168,11 +179,11 @@ function Main() {
   };
 
   useEffect(() => {
-    if (!sKaupatLookup) return;
-    const timer = setTimeout(() => finishSKaupatLookup({ type: 'notFound', reason: 'aikakatkaisu' }), S_KAUPAT_TIMEOUT_MS);
+    if (!storeLookup) return;
+    const timer = setTimeout(() => finishStoreLookup({ type: 'notFound', store: 'skaupat', reason: 'aikakatkaisu' }), STORE_LOOKUP_TIMEOUT_MS);
     return () => clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sKaupatLookup]);
+  }, [storeLookup]);
 
   const openHistoryItem = async (item: HistoryItem) => {
     const product = await getCachedProduct(item.barcode);
@@ -204,22 +215,45 @@ function Main() {
   let content: ReactNode;
   if (overlay?.kind === 'result' && analysis) {
     const { product } = overlay;
+    const updateProduct = async (updated: Product) => {
+      await saveProduct(updated);
+      setOverlay({ ...overlay, product: updated });
+    };
+    const heartGroup = product
+      ? product.heartGroup
+        ? HEART_GROUP_BY_ID.get(product.heartGroup)
+        : classifyHeartGroup(product.name, product.categories)
+      : undefined;
     content = (
       <ResultView
         product={product}
         ingredientsText={overlay.text}
         analysis={analysis}
         offline={overlay.offline}
-        heartSymbol={heartSymbolSource(product)}
-        onMarkLactoseFree={
-          product
-            ? async () => {
-                const updated = { ...product, lactoseFree: true };
-                await saveProduct(updated);
-                setOverlay({ ...overlay, product: updated });
-              }
-            : undefined
+        heartSection={
+          product && (
+            <HeartSection
+              officialSource={heartSymbolSource(product)}
+              assessment={heartGroup && assessHeartSymbol(heartGroup, product.nutrition, product.ingredientsText)}
+              groupChosenByUser={!!product.heartGroup}
+              onChangeGroup={() => setOverlay({ kind: 'heartGroup', product, back: overlay.back })}
+              onPhotographNutrition={async () => {
+                try {
+                  const nutrition = await photographNutrition();
+                  if (!nutrition) return;
+                  if (!hasNutrition(nutrition)) {
+                    Alert.alert('Arvoja ei tunnistettu', 'Kuvaa ravintoarvotaulukko suoraan edestä ja rajaa vain taulukko.');
+                    return;
+                  }
+                  await updateProduct({ ...product, nutrition: { ...product.nutrition, ...nutrition } });
+                } catch (e) {
+                  Alert.alert('Kuvaus epäonnistui', e instanceof Error ? e.message : String(e));
+                }
+              }}
+            />
+          )
         }
+        onMarkLactoseFree={product ? () => updateProduct({ ...product, lactoseFree: true }) : undefined}
         override={product ? overrides[product.barcode] : undefined}
         onOverride={product ? (v) => changeOverride(product.barcode, v) : undefined}
         onEditIngredients={
@@ -242,19 +276,32 @@ function Main() {
         initialName={overlay.name}
         initialText={overlay.text}
         onSubmit={(name, text) => submitIngredients(overlay.barcode, name, text, overlay.back)}
-        onSearchSKaupat={() => setOverlay({ kind: 'skaupat', barcode: overlay.barcode, back: overlay.back })}
+        onSearchStores={() => setOverlay({ kind: 'stores', barcode: overlay.barcode, back: overlay.back })}
         onCancel={closeOverlay}
       />
     );
-  } else if (overlay?.kind === 'skaupat') {
+  } else if (overlay?.kind === 'stores') {
     content = (
-      <SKaupatBrowserScreen
+      <StoreBrowserScreen
         query={overlay.barcode}
         onFound={async (found) => {
-          const product = await saveSKaupatProduct(overlay.barcode, found, await getCachedProduct(overlay.barcode));
+          const product = await saveStoreProduct(overlay.barcode, found, await getCachedProduct(overlay.barcode));
           await showProduct(product, overlay.back);
         }}
         onCancel={() => setOverlay({ kind: 'ingredients', barcode: overlay.barcode, back: overlay.back })}
+      />
+    );
+  } else if (overlay?.kind === 'heartGroup') {
+    const { product, back } = overlay;
+    content = (
+      <HeartGroupScreen
+        selected={product.heartGroup}
+        onSelect={async (groupId) => {
+          const updated = { ...product, heartGroup: groupId ?? undefined };
+          await saveProduct(updated);
+          setOverlay({ kind: 'result', product: updated, back });
+        }}
+        onCancel={() => setOverlay({ kind: 'result', product, back })}
       />
     );
   } else if (tab === 'scan') {
@@ -276,7 +323,7 @@ function Main() {
         <Text style={styles.headerTitle}>FODMAP-tutka</Text>
       </View>
       <View style={styles.content}>{content}</View>
-      {sKaupatLookup && <SKaupatFetcher key={sKaupatLookup.barcode} barcode={sKaupatLookup.barcode} onResult={finishSKaupatLookup} />}
+      {storeLookup && <StoreLookup key={storeLookup.barcode} barcode={storeLookup.barcode} onResult={finishStoreLookup} />}
       {!overlay && !keyboardOpen && (
         <View style={styles.tabBar}>
           {TABS.map((t) => (

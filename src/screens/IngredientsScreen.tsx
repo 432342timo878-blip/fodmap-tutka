@@ -11,12 +11,12 @@ interface Props {
   initialName?: string;
   initialText?: string;
   onSubmit: (name: string, text: string) => void;
-  /** Avaa S-kaupat-haun sovelluksen sisällä. */
-  onSearchSKaupat?: (query: string) => void;
+  /** Avaa verkkokauppahaun sovelluksen sisällä. */
+  onSearchStores?: (query: string) => void;
   onCancel?: () => void;
 }
 
-export function IngredientsScreen({ barcode, initialName = '', initialText = '', onSubmit, onSearchSKaupat, onCancel }: Props) {
+export function IngredientsScreen({ barcode, initialName = '', initialText = '', onSubmit, onSearchStores, onCancel }: Props) {
   const [name, setName] = useState(initialName);
   const [text, setText] = useState(initialText);
   const [recognizing, setRecognizing] = useState(false);
@@ -43,14 +43,14 @@ export function IngredientsScreen({ barcode, initialName = '', initialText = '',
       <Text style={styles.title}>{barcode ? 'Tuotetta ei löytynyt' : 'Tarkista ainesosaluettelo'}</Text>
       <Text style={styles.body}>
         {barcode
-          ? `Viivakoodi ${barcode}. Kuvaa ainesosaluettelo pakkauksesta tai etsi tuote S-kaupoista. Tiedot tallennetaan, joten seuraavalla kerralla tulos tulee heti.`
+          ? `Viivakoodi ${barcode}. Kuvaa ainesosaluettelo pakkauksesta tai etsi tuote verkkokaupoista (S-kaupat, K-Ruoka, Tokmanni). Tiedot tallennetaan, joten seuraavalla kerralla tulos tulee heti.`
           : 'Kuvaa ainesosaluettelo pakkauksesta, tai kirjoita tai liitä se alle.'}
       </Text>
 
       <Button label={recognizing ? 'Tunnistetaan tekstiä…' : '📷 Kuvaa ainesosaluettelo'} onPress={photograph} disabled={recognizing} />
       {recognizing && <ActivityIndicator />}
-      {barcode && onSearchSKaupat && (
-        <Button label="🔎 Etsi S-kaupoista" variant="secondary" onPress={() => onSearchSKaupat(barcode)} />
+      {barcode && onSearchStores && (
+        <Button label="🔎 Etsi verkkokaupoista" variant="secondary" onPress={() => onSearchStores(barcode)} />
       )}
 
       {barcode && (
