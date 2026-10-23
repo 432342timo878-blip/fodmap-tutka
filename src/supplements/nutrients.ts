@@ -130,3 +130,18 @@ export function formatAmount(value: number, unit: Unit): string {
   const rounded = value >= 100 ? Math.round(value) : Math.round(value * 100) / 100;
   return `${String(rounded).replace('.', ',')} ${unit}`;
 }
+
+// EU:ssa lisäravinteen pakkauksessa on aina sana "ravintolisä" (sv. kosttillskott).
+const SUPPLEMENT_WORDS = /ravintolisä|lisäravinne|food supplement|dietary supplement|kosttillskott|vitamiini|vitamin|kivennäis|multivit|tabletti|kapseli|kreatiini|omega/;
+
+/**
+ * Onko jaettu teksti lisäravinteen etiketti eikä ruoan? Ruoan ravintoarvotaulukossa voi
+ * olla kalsiumia tai D-vitamiinia (maito), joten pelkkä ravintoaine ei riitä.
+ */
+export function isSupplementLabel(text: string, label: ParsedLabel = parseSupplementText(text)): boolean {
+  const found = Object.keys(label.amounts).length;
+  if (found === 0) return false;
+  const lower = text.toLowerCase();
+  const looksLikeFood = /hiilihydraat|carbohydrate|kolhydrat/.test(lower) && !/ravintolisä|food supplement|kosttillskott/.test(lower);
+  return !looksLikeFood && (SUPPLEMENT_WORDS.test(lower) || found >= 3);
+}

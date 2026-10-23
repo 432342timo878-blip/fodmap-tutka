@@ -1,7 +1,7 @@
 import { describe, expect, it } from '@jest/globals';
 
 import { assessStack, daysLeft, Supplement } from '../assess';
-import { parseSupplementText } from '../nutrients';
+import { isSupplementLabel, parseSupplementText } from '../nutrients';
 
 describe('parseSupplementText', () => {
   it('reads a Finnish multivitamin label and ignores ingredient-list mentions and percentages', () => {
@@ -53,5 +53,16 @@ describe('assessStack', () => {
     const s = base({ name: 'Omega', unitsPerDay: 2, packSize: 60, packStartedAt: 0 });
     expect(daysLeft(s, 25 * day)).toBe(5);
     expect(assessStack([s], 25 * day).warnings[0].text).toMatch(/Omega loppuu/);
+  });
+});
+
+describe('isSupplementLabel', () => {
+  it('tells supplement labels from food nutrition tables', () => {
+    expect(isSupplementLabel('Ravintolisä. Päiväannos (1 tabletti): D3-vitamiini 50 µg')).toBe(true);
+    expect(isSupplementLabel('Magnesium Citrate 200 mg per capsule. Food supplement.')).toBe(true);
+    expect(
+      isSupplementLabel('Valio rasvaton maito. Ravintosisältö 100 g: Energia 140 kJ, Rasva 0,1 g, Hiilihydraatit 4,9 g, Kalsium 120 mg, D-vitamiini 1 µg'),
+    ).toBe(false);
+    expect(isSupplementLabel('Ainesosat: vesi, vehnäjauho, suola')).toBe(false);
   });
 });

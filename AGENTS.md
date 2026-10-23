@@ -32,6 +32,7 @@ Run `npm test` and `npm run typecheck` before declaring any task done.
 - `src/api/stores.tsx` – fallback lookup from S-kaupat, K-Ruoka and Tokmanni in hidden WebViews, all in parallel (no public APIs; their servers block non-browser and datacenter clients, so this can't be tested from CI). Extraction is text-based ("Ainesosat" / "Ravintosisältö" headings) and may need updating if a site changes.
 - `src/analysis/heartCriteria.ts` – Sydänmerkki product-group criteria transcribed from sydanmerkki.fi (10/2026); `nutrition.ts` parses nutrition tables (store pages, OCR).
 - `modules/text-recognition/` – local Expo module wrapping ML Kit on-device OCR for photographing ingredient lists.
+- `modules/share-intent/` – local Expo module receiving Android "Share" intents (text/URL or image). Shared pages are read with `SharedPageReader` (`src/api/stores.tsx`); supplement labels go to the stack preview, food to the FODMAP result.
 - `src/data/sydanmerkki.json` – Sydänmerkki product names, refreshed by `scripts/fetch-sydanmerkki.mjs` in the APK workflow (the site has no barcodes, so products are matched by name).
 - `plugins/withScannerFixes.js` – Android config: R8 off (expo-camera looks up ML Kit by class name), Play Store package query, ML Kit model preload.
 - The APK is built by `.github/workflows/android-apk.yml`; the user installs it from the run's artifacts.

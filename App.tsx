@@ -1,6 +1,6 @@
 import { StatusBar } from 'expo-status-bar';
-import { ReactNode, useEffect, useMemo, useState } from 'react';
-import { Alert, BackHandler, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ReactNode, useEffect, useMemo, useRef, useState } from 'react';
+import { ActivityIndicator, Alert, BackHandler, Pressable, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { analyzeIngredients } from './src/analysis/analyze';
@@ -8,7 +8,10 @@ import { assessHeartSymbol, classifyHeartGroup, HEART_GROUP_BY_ID } from './src/
 import { createHeartSymbolMatcher } from './src/analysis/heartSymbol';
 import { hasNutrition, parseNutritionText } from './src/analysis/nutrition';
 import { Product } from './src/api/openFoodFacts';
-import { STORE_BY_ID, StoreLookup, StoreMessage, StoreProduct } from './src/api/stores';
+import { Share, subscribeToShares } from './modules/share-intent';
+import { recognizeTextAsync } from './modules/text-recognition';
+import { ingredientsFromOcrLines } from './src/analysis/ocrText';
+import { SharedPageReader, STORE_BY_ID, StoreLookup, StoreMessage, StoreProduct } from './src/api/stores';
 import { HeartSection } from './src/components/HeartSection';
 import { ResultView } from './src/components/ResultView';
 import { photographNutrition } from './src/ocr';
@@ -21,7 +24,7 @@ import { SupplementEditScreen } from './src/screens/SupplementEditScreen';
 import { SupplementsScreen } from './src/screens/SupplementsScreen';
 import { scanBarcodeOnce } from './src/scanner';
 import { Supplement } from './src/supplements/assess';
-import { parseSupplementText } from './src/supplements/nutrients';
+import { isSupplementLabel, parseSupplementText } from './src/supplements/nutrients';
 import { StoreBrowserScreen } from './src/screens/StoreBrowserScreen';
 import {
   addToHistory,
@@ -50,10 +53,13 @@ type Overlay =
   | { kind: 'ingredients'; barcode: string; name?: string; text?: string; back: Tab }
   | { kind: 'stores'; barcode: string; back: Tab }
   | { kind: 'heartGroup'; product: Product; back: Tab }
-  | { kind: 'supplementEdit'; draft: Supplement; isNew: boolean; needsLabel?: boolean; back: Tab };
+  | { kind: 'supplementEdit'; draft: Supplement; isNew: boolean; needsLabel?: boolean; back: Tab }
+  /** Jaettua sivua tai kuvaa luetaan. */
+  | { kind: 'reading'; url?: string; subject?: string; back: Tab };
 
 /** Automaattinen verkkokauppahaku saa kestää tämän verran ennen kuin luovutetaan. */
 const STORE_LOOKUP_TIMEOUT_MS = 25000;
+
 
 const isHeartSymbolProduct = createHeartSymbolMatcher(heartSymbolData.products);
 
@@ -110,6 +116,10 @@ function Main() {
     getOverrides().then(setOverrides);
     getSupplements().then(setSupplements);
   }, []);
+
+  // Androidin "Jaa"-valikosta tuleva sivu tai kuva. Käsittelijä vaihtuu tilan mukana, joten käytetään viittausta.
+  const shareHandler = useRef<(share: Share) => void>(() => {});
+  useEffect(() => subscribeToShares((share) => shareHandler.current(share)), []);
 
   const closeOverlay = () => {
     // Alinäkymistä palataan edelliseen näkymään, muista välilehdelle.
@@ -287,6 +297,64 @@ function Main() {
     closeOverlay();
   };
 
+  /** Jaettu teksti (verkkosivu, etiketin kuva): lisäravinne pinon arvioon, ruoka FODMAP-arvioon. */
+  const showSharedText = (text: string, name: string, ingredients?: string) => {
+    const label = parseSupplementText(text);
+    if (isSupplementLabel(`${name}\n${text}`, label)) {
+      openNewSupplement(
+        { name, amounts: label.amounts, doseUnits: label.doseUnits ?? 1, unitsPerDay: label.doseUnits ?? 1, ingredientsText: ingredients },
+        false,
+      );
+      return;
+    }
+    const ingredientsText = ingredients ?? ingredientsFromOcrLines(text.split('\n'));
+    const nutrition = parseNutritionText(text);
+    if (ingredientsText.length < 5 && !hasNutrition(nutrition)) {
+      setOverlay(null);
+      Alert.alert('Tuotetietoja ei löytynyt', 'Sivulta ei löytynyt ainesosia eikä vitamiinitaulukkoa. Jaa kuvakaappaus pakkauksen tekstistä.');
+      return;
+    }
+    const product: Product = {
+      barcode: '',
+      name: name || 'Jaettu tuote',
+      ingredientsText: ingredientsText || undefined,
+      nutrition: hasNutrition(nutrition) ? nutrition : undefined,
+      source: 'web',
+      fetchedAt: Date.now(),
+    };
+    setOverlay({ kind: 'result', product, back: 'check' });
+  };
+
+  const finishSharedPage = (message: StoreMessage, subject?: string) => {
+    if (message.type !== 'product') {
+      setOverlay(null);
+      Alert.alert('Sivua ei voitu lukea', 'Jaa kuvakaappaus pakkauksen tekstistä, niin luen sen kuvasta.');
+      return;
+    }
+    const text = [message.nutritionText, message.pageText].filter(Boolean).join('\n');
+    showSharedText(text, message.name || subject || '', message.ingredients);
+  };
+
+  shareHandler.current = async (share: Share) => {
+    if (share.kind === 'text') {
+      const url = share.text.match(/https?:\/\/\S+/)?.[0];
+      if (url) {
+        setOverlay({ kind: 'reading', url, subject: share.subject || share.text.replace(url, '').trim(), back: tab });
+        return;
+      }
+      showSharedText(share.text, share.subject);
+      return;
+    }
+    setOverlay({ kind: 'reading', back: tab });
+    try {
+      const lines = await recognizeTextAsync(share.uri);
+      showSharedText(lines.join('\n'), '');
+    } catch (e) {
+      setOverlay(null);
+      Alert.alert('Kuvaa ei voitu lukea', e instanceof Error ? e.message : String(e));
+    }
+  };
+
   const analysis = useMemo(() => {
     if (overlay?.kind !== 'result') return null;
     const text = overlay.product?.ingredientsText ?? overlay.text;
@@ -297,7 +365,8 @@ function Main() {
   if (overlay?.kind === 'result' && analysis) {
     const { product } = overlay;
     const updateProduct = async (updated: Product) => {
-      await saveProduct(updated);
+      // Jaetulla sivulla ei ole viivakoodia, joten sitä ei tallenneta.
+      if (updated.barcode) await saveProduct(updated);
       setOverlay({ ...overlay, product: updated });
     };
     const heartGroup = product
@@ -336,9 +405,9 @@ function Main() {
         }
         onMarkLactoseFree={product ? () => updateProduct({ ...product, lactoseFree: true }) : undefined}
         override={product ? overrides[product.barcode] : undefined}
-        onOverride={product ? (v) => changeOverride(product.barcode, v) : undefined}
+        onOverride={product?.barcode ? (v) => changeOverride(product.barcode, v) : undefined}
         onEditIngredients={
-          product
+          product?.barcode
             ? () => setOverlay({ kind: 'ingredients', barcode: product.barcode, name: product.name, text: product.ingredientsText, back: overlay.back })
             : undefined
         }
@@ -379,11 +448,22 @@ function Main() {
         selected={product.heartGroup}
         onSelect={async (groupId) => {
           const updated = { ...product, heartGroup: groupId ?? undefined };
-          await saveProduct(updated);
+          if (updated.barcode) await saveProduct(updated);
           setOverlay({ kind: 'result', product: updated, back });
         }}
         onCancel={() => setOverlay({ kind: 'result', product, back })}
       />
+    );
+  } else if (overlay?.kind === 'reading') {
+    content = (
+      <View style={styles.reading}>
+        <ActivityIndicator size="large" color={colors.primary} />
+        <Text style={styles.readingText}>{overlay.url ? 'Luetaan jaettua sivua…' : 'Luetaan jaettua kuvaa…'}</Text>
+        {overlay.subject ? <Text style={styles.readingSmall}>{overlay.subject}</Text> : null}
+        <Pressable onPress={closeOverlay}>
+          <Text style={styles.readingCancel}>Peruuta</Text>
+        </Pressable>
+      </View>
     );
   } else if (overlay?.kind === 'supplementEdit') {
     const { draft } = overlay;
@@ -428,6 +508,9 @@ function Main() {
         <Text style={styles.headerTitle}>FODMAP-tutka</Text>
       </View>
       <View style={styles.content}>{content}</View>
+      {overlay?.kind === 'reading' && overlay.url && (
+        <SharedPageReader key={overlay.url} url={overlay.url} onResult={(m) => finishSharedPage(m, overlay.subject)} />
+      )}
       {storeLookup && (
         <StoreLookup
           key={storeLookup.barcode}
@@ -465,5 +548,9 @@ const styles = StyleSheet.create({
   tab: { flex: 1, alignItems: 'center', paddingVertical: 8 },
   tabIcon: { fontSize: 20 },
   tabLabel: { fontSize: 12, color: colors.muted, marginTop: 2 },
+  reading: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 14, padding: 24 },
+  readingText: { fontSize: 18, fontWeight: '600', color: colors.text },
+  readingSmall: { fontSize: 14, color: colors.muted, textAlign: 'center' },
+  readingCancel: { fontSize: 16, color: colors.primary, fontWeight: '600', padding: 8 },
   tabLabelActive: { color: colors.primary, fontWeight: '700' },
 });

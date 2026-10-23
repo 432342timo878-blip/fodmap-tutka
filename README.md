@@ -32,7 +32,11 @@ If a product is still not found, type the ingredient list from the package.
 - It flags duplicates, IBS-unfriendly ingredients (sorbitol, xylitol, high-dose magnesium or vitamin C) and common timing conflicts such as calcium with iron.
 - It warns when a pack is about to run out.
 - Before you add a new product, it shows what adding it would change ("Jos lisäät tämän pinoosi").
-- All checks are fixed rules, with no AI and no paid services. It is saved for that barcode, so the next scan gives the answer straight away. Products you add to Open Food Facts yourself also help other users.
+- All checks are fixed rules, with no AI and no paid services.
+
+**Sharing from the browser:**
+- On any product page in Chrome, tap **Share → FODMAP-tutka**. A supplement opens the "what would this change in my stack" view; a food opens the FODMAP and Sydänmerkki result.
+- You can also share a **screenshot** of a label, and the app reads the text from the image. It is saved for that barcode, so the next scan gives the answer straight away. Products you add to Open Food Facts yourself also help other users.
 
 **Personal settings:** in *Asetukset* you can mark FODMAP groups you tolerate (e.g. lactose), and on any product you can tap 👍/👎 to record your own experience.
 

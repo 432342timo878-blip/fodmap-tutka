@@ -9,6 +9,8 @@ import { StyleSheet, View } from 'react-native';
 import WebView, { WebViewMessageEvent } from 'react-native-webview';
 
 export type StoreId = 'skaupat' | 'kruoka' | 'tokmanni';
+/** Mikä tahansa jaettu verkkosivu. */
+export type PageSourceId = StoreId | 'web';
 
 export interface Store {
   id: StoreId;
@@ -51,7 +53,7 @@ export const STORES: Store[] = [
 export const STORE_BY_ID = Object.fromEntries(STORES.map((s) => [s.id, s])) as Record<StoreId, Store>;
 
 export interface StoreProduct {
-  store: StoreId;
+  store: PageSourceId;
   name?: string;
   ingredients?: string;
   nutritionText?: string;
@@ -61,14 +63,14 @@ export interface StoreProduct {
   url: string;
 }
 
-export type StoreMessage = ({ type: 'product' } & StoreProduct) | { type: 'notFound'; store: StoreId; reason: string };
+export type StoreMessage = ({ type: 'product' } & StoreProduct) | { type: 'notFound'; store: PageSourceId; reason: string };
 
 /**
  * Sivulle ajettava skripti. Hakutulossivulta avataan tuote (viivakoodi osoitteessa, tai
  * ensimmäinen tulos, jonka sivulta viivakoodi tarkistetaan). Tyhjällä `ean`:lla luetaan vain
  * nykyinen sivu (käyttäjä selaa itse).
  */
-export function extractionScript(store: Store, ean: string): string {
+export function extractionScript(store: Pick<Store, 'productPath' | 'resultLinks'> & { id: PageSourceId }, ean: string): string {
   const config = { id: store.id, productPath: store.productPath?.source ?? null, links: store.resultLinks };
   return `(function () {
   if (window.__fodmapTutka) return; window.__fodmapTutka = true;
@@ -80,8 +82,8 @@ export function extractionScript(store: Store, ean: string): string {
   function clean(t) { return (t || '').replace(/\\s+/g, ' ').trim(); }
   function session(k, v) { try { if (v === undefined) return sessionStorage.getItem(k); sessionStorage.setItem(k, v); } catch (e) { return null; } }
   var HEADINGS = /^(ainesosat|ainekset|raaka-aineet|ravintosisältö|ravintoarvot|ravintoarvo|tuotetiedot|valmistusmaa|alkuperämaa|säilytys|käyttöohje|allergeenit|valmistaja|lisätiedot|tuotekuvaus|pakkaus|kuvaus|hinta)/i;
-  var INGREDIENTS = /^(ainesosat|ainekset|raaka-aineet|ainesosaluettelo)\\s*:?\\s*(.*)$/i;
-  var NUTRITION = /^(ravintosisältö|ravintoarvot|ravintoarvo|ravintoaineet|ravintoainesisältö|vaikuttavat aineet|päivittäisannos|päiväannos|vuorokausiannos)/i;
+  var INGREDIENTS = /^(ainesosat|ainekset|raaka-aineet|ainesosaluettelo|ingredienser|ingredients|other ingredients)\\s*:?\\s*(.*)$/i;
+  var NUTRITION = /^(ravintosisältö|ravintoarvot|ravintoarvo|ravintoaineet|ravintoainesisältö|vaikuttavat aineet|päivittäisannos|päiväannos|vuorokausiannos|näringsinnehåll|supplement facts|nutrition facts|nutrition information)/i;
 
   function lines() { return (document.body.innerText || '').split('\\n').map(clean).filter(Boolean); }
 
@@ -163,7 +165,8 @@ export function extractionScript(store: Store, ean: string): string {
           name: h1 ? clean(h1.innerText) : undefined,
           ingredients: ingredients || undefined,
           nutritionText: nutritionFromText(ls) || undefined,
-          pageText: clean(area.innerText).slice(0, 8000),
+          // Jaetulla sivulla (ei viivakoodia) tuotetiedot voivat olla missä tahansa sivulla.
+          pageText: clean((EAN ? area : document.body).innerText).slice(0, 20000),
           heartSymbol: /sydänmerkki/i.test(area.innerText || '') || !!area.querySelector('img[alt*="ydänmerk"], img[alt*="ydanmerk"]'),
           url: location.href,
         });
@@ -186,7 +189,7 @@ export function extractionScript(store: Store, ean: string): string {
 })(); true;`;
 }
 
-export function parseMessage(e: WebViewMessageEvent, store: StoreId): StoreMessage {
+export function parseMessage(e: WebViewMessageEvent, store: PageSourceId): StoreMessage {
   try {
     return JSON.parse(e.nativeEvent.data) as StoreMessage;
   } catch {
@@ -205,7 +208,7 @@ interface LookupProps {
 /** Hakee tuotetta kaikista kaupoista yhtä aikaa näkymättömillä selaimilla. */
 export function StoreLookup({ barcode, accept, onResult }: LookupProps) {
   const done = useRef(false);
-  const failed = useRef(new Set<StoreId>());
+  const failed = useRef(new Set<PageSourceId>());
   const handle = (message: StoreMessage) => {
     if (done.current) return;
     if (message.type === 'product' && accept(message)) {
@@ -246,3 +249,24 @@ const styles = StyleSheet.create({
   hidden: { position: 'absolute', top: 0, left: 0, width: 400, height: 800, opacity: 0, zIndex: -1 },
   web: { position: 'absolute', top: 0, left: 0, width: 400, height: 800 },
 });
+
+/** Lukee jaetun verkkosivun tuotetiedot näkymättömällä selaimella. */
+export function SharedPageReader({ url, onResult }: { url: string; onResult: (message: StoreMessage) => void }) {
+  const done = useRef(false);
+  const finish = (message: StoreMessage) => {
+    if (done.current) return;
+    done.current = true;
+    onResult(message);
+  };
+  return (
+    <View style={styles.hidden} pointerEvents="none">
+      <WebView
+        style={styles.web}
+        source={{ uri: url }}
+        injectedJavaScript={extractionScript({ id: 'web', resultLinks: '' }, '')}
+        onMessage={(e: WebViewMessageEvent) => finish(parseMessage(e, 'web'))}
+        onError={() => finish({ type: 'notFound', store: 'web', reason: 'sivu ei latautunut' })}
+      />
+    </View>
+  );
+}

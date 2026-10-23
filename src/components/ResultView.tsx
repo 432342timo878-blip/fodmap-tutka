@@ -156,6 +156,7 @@ const SOURCE_LABEL: Record<Product['source'], string> = {
   kruoka: ' · K-Ruoka',
   tokmanni: ' · Tokmanni',
   manual: ' · oma merkintä',
+  web: ' · jaettu sivu',
 };
 
 function FindingRow({ finding }: { finding: Finding }) {
