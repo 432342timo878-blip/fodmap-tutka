@@ -14,7 +14,11 @@ const SHOPS = [
   { host: 'www.apteekki360.fi', name: 'Apteekki360' },
 ];
 const MAX_PAGES = 40;
-const CONCURRENCY = 4;
+const CONCURRENCY = 2;
+/** Shopify rajoittaa pyyntötahtia; odotetaan ja yritetään uudelleen. */
+const RETRIES = 4;
+// Testiajoon: SAMPLE=40 käsittelee vain 40 tuotetta kaupasta ja tulostaa esimerkkejä ohitetuista.
+const SAMPLE = Number(process.env.SAMPLE) || 0;
 const SUPPLEMENT_TYPE = /vitamin|supplement|ravintolis|lisäravin|nutrition|protein|sport|urheil|mineral|kivennäis|omega|luontais|magnesium|kalsium/i;
 const NUTRIENT_AMOUNT =
   /(vitamiini|vitamin|magnesium|kalsium|sinkki|rauta|jodi|seleeni|kromi|kalium|omega|epa|dha|kreatiini|foolihappo|folaatti|biotiini|b12|b6|tiamiini|riboflaviini|niasiini)[^\n]{0,45}\d[\d,.]*\s*(mg|µg|μg|mcg|g|iu|ky)/i;
@@ -37,10 +41,20 @@ function htmlLines(html) {
   return text.split('\n').map((l) => l.replace(/\s+/g, ' ').trim()).filter(Boolean);
 }
 
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
 async function get(url, as = 'text') {
-  const res = await fetch(url, { headers: { 'User-Agent': 'FODMAP-tutka (henkilokohtainen kaytto)' }, signal: AbortSignal.timeout(20000) });
-  if (!res.ok) throw new Error(`${url}: ${res.status}`);
-  return as === 'json' ? res.json() : res.text();
+  for (let attempt = 0; ; attempt++) {
+    const res = await fetch(url, { headers: { 'User-Agent': 'FODMAP-tutka (henkilokohtainen kaytto)' }, signal: AbortSignal.timeout(20000) });
+    if (res.ok) return as === 'json' ? res.json() : res.text();
+    if ((res.status === 429 || res.status >= 500) && attempt < RETRIES) {
+      await sleep(Number(res.headers.get('retry-after')) * 1000 || 2000 * 2 ** attempt);
+      continue;
+    }
+    const err = new Error(`${url}: ${res.status}`);
+    err.status = res.status;
+    throw err;
+  }
 }
 
 /** Yksi kauppa saa olla poissa käytöstä: palautetaan oletus. */
@@ -62,14 +76,19 @@ async function pool(items, worker) {
         try {
           const r = await worker(item);
           if (r) results.push(r);
-        } catch {
-          // Yksittäinen tuotesivu saa epäonnistua.
+        } catch (e) {
+          // Yksittäinen tuotesivu saa epäonnistua; syy kirjataan tilastoon.
+          count(`virhe ${e.status ?? e.name}`);
         }
+        await sleep(250);
       }
     }),
   );
   return results;
 }
+
+let stats = {};
+const count = (key) => (stats[key] = (stats[key] ?? 0) + 1);
 
 const all = [];
 for (const shop of SHOPS) {
@@ -83,12 +102,22 @@ for (const shop of SHOPS) {
     (p) => shop.allProducts || SUPPLEMENT_TYPE.test(`${p.product_type} ${(p.tags ?? []).join(' ')} ${p.title}`),
   );
 
-  const found = await pool(candidates, async (p) => {
+  stats = {};
+  let examples = 0;
+  const todo = SAMPLE ? candidates.filter((_, i) => i % Math.max(1, Math.floor(candidates.length / SAMPLE)) === 0).slice(0, SAMPLE) : candidates;
+  const found = await pool(todo, async (p) => {
     const html = await get(`https://${shop.host}/products/${p.handle}`);
     const lines = htmlLines(html);
     const labelLines = lines.filter((l) => l.length < 300 && AMOUNT_LINE.test(l));
     const labelText = [...new Set(labelLines)].slice(0, 60).join('\n');
-    if (!NUTRIENT_AMOUNT.test(labelText)) return null;
+    if (!NUTRIENT_AMOUNT.test(labelText)) {
+      if (SAMPLE && examples++ < 3) {
+        const amountLines = lines.filter((l) => /\d\s*(mg|µg|μg|mcg)/i.test(l)).slice(0, 6);
+        console.log(`--- ${shop.name} ei määriä: ${p.handle}\n${amountLines.join('\n') || '(ei yhtään mg/µg-riviä sivulla)'}`);
+      }
+      count('ei määriä');
+      return null;
+    }
 
     const eans = new Set();
     for (const v of p.variants ?? []) {
@@ -96,7 +125,16 @@ for (const shop of SHOPS) {
       if (m) eans.add(m[1]);
     }
     for (const m of html.matchAll(/"(?:barcode|gtin13|gtin)"\s*:\s*"(\d{8,14})"/g)) eans.add(m[1]);
-    if (eans.size === 0) return null;
+    if (eans.size === 0) {
+      // Shopifyn tuotekohtainen JSON sisältää variaatioiden viivakoodit.
+      const js = await get(`https://${shop.host}/products/${p.handle}.js`, 'json');
+      for (const v of js.variants ?? []) if (/^\d{8,14}$/.test(String(v.barcode ?? ''))) eans.add(String(v.barcode));
+    }
+    if (eans.size === 0) {
+      count('ei viivakoodia');
+      return null;
+    }
+    count('ok');
 
     const ingredientsLine = lines.find((l) => /^(ainesosat|ainekset|raaka-aineet)\b/i.test(l));
     return {
@@ -109,11 +147,12 @@ for (const shop of SHOPS) {
     };
   });
   // ::notice näkyy GitHubin ajon yhteenvedossa.
-  console.log(`::notice::${shop.name}: ${products.length} tuotetta, ${candidates.length} lisäravinne-ehdokasta, ${found.length} tietokantaan`);
+  const reasons = Object.entries(stats).map(([k, v]) => `${k} ${v}`).join(', ');
+  console.log(`::notice::${shop.name}: ${products.length} tuotetta, ${candidates.length} ehdokasta, ${found.length} tietokantaan (${reasons})`);
   all.push(...found);
 }
 
-if (all.length < 50) throw new Error(`vain ${all.length} lisäravinnetta – sivustojen rakenne muuttunut?`);
+if (!SAMPLE && all.length < 50) throw new Error(`vain ${all.length} lisäravinnetta – sivustojen rakenne muuttunut?`);
 writeFileSync(
   new URL('../src/data/supplements-db.json', import.meta.url),
   JSON.stringify({ updated: new Date().toISOString().slice(0, 10), products: all }) + '\n',

@@ -1,0 +1,14 @@
+# Väliaikainen: lisäravinnekeräimen testiajo ilman APK-käännöstä. Poistetaan testauksen jälkeen.
+name: Probe data sources
+on:
+  push:
+    paths: ['.github/workflows/probe.yml', 'scripts/fetch-supplements.mjs']
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: SAMPLE=40 node scripts/fetch-supplements.mjs
