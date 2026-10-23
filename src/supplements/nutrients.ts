@@ -127,7 +127,7 @@ export function parseSupplementText(raw: string): ParsedLabel {
     if (e !== undefined || d !== undefined) amounts.omega3 = (e ?? 0) + (d ?? 0);
   }
 
-  const dose = text.match(/(päivä(?:annos|ittäis(?:annos)?)|annos|vuorokausiannos|daily dose|per)\s*\(?\s*(\d+)\s*(tabletti|tablettia|kapseli|kapselia|pastilli|pastillia|purutabletti|purutablettia|annospussi|mittalusikallinen|tippa|tippaa|tabs?|caps|softgels?|gummies|kumi)/);
+  const dose = text.match(/(päivä(?:annos|ittäis(?:annos)?)|annos|vuorokausiannos|daily dose|per)\s*\(?\s*(\d+)\s*(tabletti|tablettia|kapseli|kapselia|pastilli|pastillia|purutabletti|purutablettia|annospussi|mittalusikallinen|tippa|tippaa|tabs?|caps|softgels?|gummies|kumi|kpl|kps|kaps)/);
   if (dose) return { amounts, doseUnits: parseInt(dose[2], 10) };
   // Taulukon otsikko voi olla vaihteluväli ("2–6 mittalusikallista"): määrät on silloin annettu
   // vaihteluvälinä ("76–228 mg"), ja luemme ylärajan – se vastaa suurinta kappalemäärää.

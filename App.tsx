@@ -11,8 +11,10 @@ import { Product } from './src/api/openFoodFacts';
 import { Share, subscribeToShares } from './modules/share-intent';
 import { recognizeTextAsync } from './modules/text-recognition';
 import { ingredientsFromOcrLines } from './src/analysis/ocrText';
-import { fetchTokmanni } from './src/api/tokmanni';
-import { SharedPageReader, STORE_BY_ID, StoreLookup, StoreMessage, StoreProduct } from './src/api/stores';
+import { directLookup, withTimeout } from './src/api/directLookup';
+import { fetchSKaupat } from './src/api/groceryApis';
+import { KRuokaLookup } from './src/api/kRuokaLookup';
+import { SharedPageReader, STORE_BY_ID, StoreMessage, StoreProduct } from './src/api/stores';
 import { HeartSection } from './src/components/HeartSection';
 import { ResultView } from './src/components/ResultView';
 import { photographNutrition } from './src/ocr';
@@ -106,8 +108,8 @@ function Main() {
     barcode: string;
     /** Ruoka: ainesosat FODMAP-arvioon. Lisäravinne: vitamiinitaulukko pinoon. */
     purpose: 'food' | 'supplement';
-    /** Tokmannin (suora haku) tulos, liitetään syihin, jos muutkaan kaupat eivät löydä. */
-    tokmanniInfo?: string;
+    /** Suorien hakujen (S-kaupat, Tokmanni) tulokset, liitetään syihin, jos K-Ruokakaan ei löydä. */
+    directInfo?: string;
     partial?: Product;
     offline?: boolean;
   } | null>(null);
@@ -159,14 +161,24 @@ function Main() {
     try {
       const result = await lookupProduct(barcode);
       if (!('notFound' in result) && result.product.ingredientsText) {
-        await showProduct(result.product, 'scan', result.offline);
+        let product = result.product;
+        // Sydänmerkki-arvio tarvitsee ravintosisällön; täydennetään S-kaupoista, jos Open Food Factsilta puuttuu.
+        if (!hasNutrition(product.nutrition) && !result.offline) {
+          const s = await withTimeout(fetchSKaupat(barcode), 5000);
+          const nutrition = s?.nutritionText ? parseNutritionText(s.nutritionText) : undefined;
+          if (hasNutrition(nutrition)) {
+            product = { ...product, nutrition };
+            await saveProduct(product);
+          }
+        }
+        await showProduct(product, 'scan', result.offline);
         setBusy(false);
       } else {
-        // Ainesosat puuttuvat Open Food Factsista – kokeillaan verkkokauppoja (busy jatkuu).
+        // Ainesosat puuttuvat Open Food Factsista – kokeillaan kauppoja (busy jatkuu).
         const partial = 'notFound' in result ? undefined : result.product;
-        const tokmanni = await fetchTokmanni(barcode).catch(() => null);
-        if (tokmanni?.ingredients) {
-          await showProduct(await saveStoreProduct(barcode, tokmanni, partial), 'scan');
+        const direct = await directLookup(barcode, (p) => !!p.ingredients);
+        if (direct.product) {
+          await showProduct(await saveStoreProduct(barcode, direct.product, partial), 'scan');
           setBusy(false);
           return;
         }
@@ -175,7 +187,7 @@ function Main() {
           purpose: 'food',
           partial,
           offline: 'notFound' in result ? undefined : result.offline,
-          tokmanniInfo: `Tokmanni: ${tokmanni ? 'ei ainesosia' : 'ei valikoimissa'}`,
+          directInfo: direct.reasons.join(' · '),
         });
       }
     } catch {
@@ -226,7 +238,7 @@ function Main() {
         !hasLabel,
         found
           ? `Tiedot: ${STORE_BY_ID[found.store as keyof typeof STORE_BY_ID]?.name ?? 'verkkosivu'}`
-          : `Haku verkkokaupoista: ${lookup.tokmanniInfo} · ${message.type === 'notFound' ? message.reason : ''}`,
+          : `Haku kaupoista: ${lookup.directInfo} · K-Ruoka: ${message.type === 'notFound' ? message.reason : ''}`,
       );
       return;
     }
@@ -239,7 +251,7 @@ function Main() {
         setOverlay({
           kind: 'ingredients',
           barcode: lookup.barcode,
-          lookupInfo: message.type === 'notFound' ? `Open Food Facts: ei ainesosia · ${lookup.tokmanniInfo} · ${message.reason}` : undefined,
+          lookupInfo: message.type === 'notFound' ? `Open Food Facts: ei ainesosia · ${lookup.directInfo} · K-Ruoka: ${message.reason}` : undefined,
           back: 'scan',
         });
       }
@@ -325,31 +337,27 @@ function Main() {
     } catch {
       // Verkkokaupat yritetään silti.
     }
-    const tokmanni = await fetchTokmanni(barcode).catch(() => null);
-    const tokmanniLabel = tokmanni && parseSupplementText(`${tokmanni.nutritionText ?? ''}\n${tokmanni.pageText ?? ''}`);
-    if (tokmanni && tokmanniLabel && Object.keys(tokmanniLabel.amounts).length > 0) {
+    const labelOf = (p: StoreProduct) => parseSupplementText(`${p.nutritionText ?? ''}\n${p.pageText ?? ''}`);
+    const direct = await directLookup(barcode, (p) => Object.keys(labelOf(p).amounts).length > 0);
+    if (direct.product) {
+      const label = labelOf(direct.product);
       setBusy(false);
       openNewSupplement(
         {
           barcode,
-          name: partial?.name ?? tokmanni.name ?? '',
+          name: partial?.name ?? direct.product.name ?? '',
           brand: partial?.brand,
-          ingredientsText: tokmanni.ingredients ?? partial?.ingredientsText,
-          amounts: tokmanniLabel.amounts,
-          doseUnits: tokmanniLabel.doseUnits ?? 1,
-          unitsPerDay: tokmanniLabel.doseUnits ?? 1,
+          ingredientsText: direct.product.ingredients ?? partial?.ingredientsText,
+          amounts: label.amounts,
+          doseUnits: label.doseUnits ?? 1,
+          unitsPerDay: label.doseUnits ?? 1,
         },
         false,
-        'Tiedot: Tokmanni. Tarkista annoskoko pakkauksesta.',
+        `Tiedot: ${STORE_BY_ID[direct.product.store as keyof typeof STORE_BY_ID]?.name ?? 'kauppa'}. Tarkista annoskoko pakkauksesta.`,
       );
       return;
     }
-    setStoreLookup({
-      barcode,
-      purpose: 'supplement',
-      partial,
-      tokmanniInfo: `Tokmanni: ${tokmanni ? 'ei vitamiinitaulukkoa' : 'ei valikoimissa'}`,
-    });
+    setStoreLookup({ barcode, purpose: 'supplement', partial, directInfo: direct.reasons.join(' · ') });
   };
 
   const saveSupplement = async (s: Supplement) => {
@@ -584,16 +592,7 @@ function Main() {
         <SharedPageReader key={overlay.url} url={overlay.url} onResult={(m) => finishSharedPage(m, overlay.subject)} />
       )}
       {storeLookup && (
-        <StoreLookup
-          key={storeLookup.barcode}
-          barcode={storeLookup.barcode}
-          accept={(p) =>
-            storeLookup.purpose === 'food'
-              ? !!p.ingredients
-              : Object.keys(parseSupplementText(`${p.nutritionText ?? ''}\n${p.pageText ?? ''}`).amounts).length > 0
-          }
-          onResult={finishStoreLookup}
-        />
+        <KRuokaLookup key={storeLookup.barcode} barcode={storeLookup.barcode} onResult={finishStoreLookup} />
       )}
       {!overlay && !keyboardOpen && (
         <View style={styles.tabBar}>

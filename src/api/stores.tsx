@@ -1,9 +1,7 @@
-// Tuotetiedot suomalaisista verkkokaupoista: S-kaupat, K-Ruoka ja Tokmanni.
+// Verkkokauppojen sivujen lukeminen: sovelluksen sisäinen kauppaselain ja jaetut sivut.
 //
-// Kaupoilla ei ole julkisia rajapintoja, ja niiden palvelimet torjuvat suorat palvelinkutsut.
-// Siksi sivut avataan puhelimessa näkymättömään selaimeen (WebView) kuten tavallisessa
-// selaimessa, ja ainesosat ja ravintosisältö luetaan sivun tekstistä. Epävirallinen tapa:
-// jos kauppa muuttaa sivujaan, haku voi lakata toimimasta – silloin tuote kuvataan.
+// Sivun teksti luetaan otsikoiden ("Ainesosat", "Ravintosisältö") perusteella. Automaattiset
+// viivakoodihaut tehdään kauppojen rajapinnoista: groceryApis.ts, tokmanni.ts, kRuokaLookup.tsx.
 import { useRef } from 'react';
 import { StyleSheet, View } from 'react-native';
 import WebView, { WebViewMessageEvent } from 'react-native-webview';
@@ -28,7 +26,7 @@ export const STORES: Store[] = [
     id: 'skaupat',
     name: 'S-kaupat',
     host: 'www.s-kaupat.fi',
-    searchUrl: (q) => `https://www.s-kaupat.fi/hakutulos?queryString=${encodeURIComponent(q)}`,
+    searchUrl: (q) => `https://www.s-kaupat.fi/hakutulokset?queryString=${encodeURIComponent(q)}`,
     productPath: /\/tuote\//,
     resultLinks: 'a[href*="/tuote/"]',
   },
@@ -51,9 +49,6 @@ export const STORES: Store[] = [
 ];
 
 export const STORE_BY_ID = Object.fromEntries(STORES.map((s) => [s.id, s])) as Record<StoreId, Store>;
-
-/** Piilotettu selain tarvitaan vain kaupoille, jotka estävät suorat pyynnöt. Tokmanni haetaan suoraan (tokmanni.ts). */
-const WEBVIEW_STORES = STORES.filter((s) => s.id !== 'tokmanni');
 
 export interface StoreProduct {
   store: PageSourceId;
@@ -204,65 +199,12 @@ export function extractionScript(store: Pick<Store, 'productPath' | 'resultLinks
 })(); true;`;
 }
 
-export function describeReasons(reasons: Map<PageSourceId, string>): string {
-  return WEBVIEW_STORES.map((s) => `${s.name}: ${reasons.get(s.id) ?? 'ei vastannut ajoissa'}`).join(' · ');
-}
-
 export function parseMessage(e: WebViewMessageEvent, store: PageSourceId): StoreMessage {
   try {
     return JSON.parse(e.nativeEvent.data) as StoreMessage;
   } catch {
     return { type: 'notFound', store, reason: 'virheellinen vastaus' };
   }
-}
-
-interface LookupProps {
-  barcode: string;
-  /** Kelpaako kaupan vastaus (esim. löytyikö ainesosaluettelo). */
-  accept: (product: StoreProduct) => boolean;
-  /** Kutsutaan kerran: ensimmäinen kelpaava vastaus, tai notFound kun kaikki kaupat ovat vastanneet. */
-  onResult: (message: StoreMessage) => void;
-}
-
-/** Hakee tuotetta kaikista kaupoista yhtä aikaa näkymättömillä selaimilla. */
-export function StoreLookup({ barcode, accept, onResult }: LookupProps) {
-  const done = useRef(false);
-  // Miksi kustakin kaupasta ei löytynyt – näytetään käyttäjälle, ettei tarvitse arvailla.
-  const reasons = useRef(new Map<PageSourceId, string>());
-  const handle = (message: StoreMessage) => {
-    if (done.current) return;
-    if (message.type === 'product' && accept(message)) {
-      done.current = true;
-      onResult(message);
-      return;
-    }
-    if (reasons.current.has(message.store)) return;
-    reasons.current.set(message.store, message.type === 'notFound' ? message.reason : 'tuotesivulta ei löytynyt tietoja');
-    if (reasons.current.size === WEBVIEW_STORES.length) {
-      done.current = true;
-      onResult({ type: 'notFound', store: message.store, reason: describeReasons(reasons.current) });
-    }
-  };
-  return (
-    <View style={styles.hidden} pointerEvents="none">
-      {WEBVIEW_STORES.map((store) => (
-        <WebView
-          key={store.id}
-          style={styles.web}
-          source={{ uri: store.searchUrl(barcode) }}
-          injectedJavaScript={extractionScript(store, barcode)}
-          onMessage={(e: WebViewMessageEvent) => handle(parseMessage(e, store.id))}
-          onError={() => handle({ type: 'notFound', store: store.id, reason: 'sivu ei latautunut' })}
-          onHttpError={(e) => {
-            // Vain pääsivun virhe ratkaisee; esim. mainosten latausvirheet eivät.
-            if (e.nativeEvent.statusCode >= 400 && e.nativeEvent.url.includes(store.host)) {
-              handle({ type: 'notFound', store: store.id, reason: `HTTP ${e.nativeEvent.statusCode}` });
-            }
-          }}
-        />
-      ))}
-    </View>
-  );
 }
 
 const styles = StyleSheet.create({

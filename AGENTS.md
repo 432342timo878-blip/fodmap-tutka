@@ -30,7 +30,8 @@ Run `npm test` and `npm run typecheck` before declaring any task done.
 - `src/analysis/` – ingredient-list parser and analyzer (pure TypeScript, covered by `npm test`).
 - `src/api/openFoodFacts.ts`, `src/storage.ts` – product lookup and on-device storage.
 - `src/api/tokmanni.ts` – Tokmanni lookup by EAN via its Klevu search API and server-rendered product pages (plain fetch; tested).
-- `src/api/stores.tsx` – fallback lookup from S-kaupat and K-Ruoka in hidden WebViews (their bot protection blocks servers, so this can't be tested from CI; it waits through the Vercel/Cloudflare checkpoint page). Extraction is text-based ("Ainesosat" / "Ravintosisältö" headings). The in-app store browser also has a Tokmanni tab.
+- `src/api/groceryApis.ts` – S-kaupat GraphQL API (plain fetch from a phone/home IP; also covers Sokos products) and the K-Ruoka response mapper. `src/api/kRuokaLookup.tsx` calls K-Ruoka's `/kr-api/v4/products/<EAN>` from inside a hidden k-ruoka.fi WebView (Cloudflare blocks plain requests). `src/api/directLookup.ts` runs S-kaupat and Tokmanni in parallel. None of these stores can be reached from CI or the cloud session (datacenter IPs are blocked); the request shapes were verified from a home connection.
+- `src/api/stores.tsx` – reading store pages by their text ("Ainesosat" / "Ravintosisältö" headings): the in-app store browser (S-kaupat / K-Ruoka / Tokmanni tabs) and pages shared to the app.
 - `docs/store-data-findings.md` – what is known about each store's data and blocking. Update it when you learn more.
 - `src/analysis/heartCriteria.ts` – Sydänmerkki product-group criteria transcribed from sydanmerkki.fi (10/2026); `nutrition.ts` parses nutrition tables (store pages, OCR).
 - `modules/text-recognition/` – local Expo module wrapping ML Kit on-device OCR for photographing ingredient lists.
