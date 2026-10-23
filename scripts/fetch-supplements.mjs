@@ -9,11 +9,13 @@ import { writeFileSync } from 'node:fs';
 
 const SHOPS = [
   { host: 'www.ruohonjuuri.fi', name: 'Ruohonjuuri' },
-  { host: 'puhdasplus.fi', name: 'Puhdas+' },
+  { host: 'puhdasplus.fi', name: 'Puhdas+', allProducts: true },
+  { host: 'www.puhdistamo.fi', name: 'Puhdistamo', allProducts: true },
+  { host: 'www.apteekki360.fi', name: 'Apteekki360' },
 ];
 const MAX_PAGES = 40;
 const CONCURRENCY = 4;
-const SUPPLEMENT_TYPE = /vitamin|supplement|ravintolis|nutrition|protein|sport|urheil|mineral|kivennäis|omega/i;
+const SUPPLEMENT_TYPE = /vitamin|supplement|ravintolis|lisäravin|nutrition|protein|sport|urheil|mineral|kivennäis|omega|luontais|magnesium|kalsium/i;
 const NUTRIENT_AMOUNT =
   /(vitamiini|vitamin|magnesium|kalsium|sinkki|rauta|jodi|seleeni|kromi|kalium|omega|epa|dha|kreatiini|foolihappo|folaatti|biotiini|b12|b6|tiamiini|riboflaviini|niasiini)[^\n]{0,45}\d[\d,.]*\s*(mg|µg|μg|mcg|g|iu|ky)/i;
 const AMOUNT_LINE = /\d[\d,.]*\s*(mg|µg|μg|mcg|ug|g|iu|ky)(?![a-zåäö])|annos|kapseli|tabletti|pastilli|ravintosisältö|sisältää|ravintolisä/i;
@@ -41,6 +43,15 @@ async function get(url, as = 'text') {
   return as === 'json' ? res.json() : res.text();
 }
 
+/** Yksi kauppa saa olla poissa käytöstä: palautetaan oletus. */
+async function getOr(url, fallback) {
+  try {
+    return await get(url, 'json');
+  } catch {
+    return fallback;
+  }
+}
+
 async function pool(items, worker) {
   const results = [];
   let next = 0;
@@ -64,12 +75,12 @@ const all = [];
 for (const shop of SHOPS) {
   const products = [];
   for (let page = 1; page <= MAX_PAGES; page++) {
-    const { products: batch } = await get(`https://${shop.host}/products.json?limit=250&page=${page}`, 'json');
+    const { products: batch } = await getOr(`https://${shop.host}/products.json?limit=250&page=${page}`, { products: [] });
     if (!batch?.length) break;
     products.push(...batch);
   }
   const candidates = products.filter(
-    (p) => SUPPLEMENT_TYPE.test(`${p.product_type} ${(p.tags ?? []).join(' ')}`) || shop.host === 'puhdasplus.fi',
+    (p) => shop.allProducts || SUPPLEMENT_TYPE.test(`${p.product_type} ${(p.tags ?? []).join(' ')} ${p.title}`),
   );
 
   const found = await pool(candidates, async (p) => {
@@ -97,7 +108,8 @@ for (const shop of SHOPS) {
       ingredients: ingredientsLine?.replace(/^(ainesosat|ainekset|raaka-aineet)\s*:?\s*/i, '') || undefined,
     };
   });
-  console.log(`${shop.name}: ${products.length} tuotetta, ${candidates.length} lisäravinne-ehdokasta, ${found.length} tietokantaan`);
+  // ::notice näkyy GitHubin ajon yhteenvedossa.
+  console.log(`::notice::${shop.name}: ${products.length} tuotetta, ${candidates.length} lisäravinne-ehdokasta, ${found.length} tietokantaan`);
   all.push(...found);
 }
 
@@ -106,4 +118,4 @@ writeFileSync(
   new URL('../src/data/supplements-db.json', import.meta.url),
   JSON.stringify({ updated: new Date().toISOString().slice(0, 10), products: all }) + '\n',
 );
-console.log(`Lisäravinteita yhteensä: ${all.length}`);
+console.log(`::notice::Lisäravinteita yhteensä: ${all.length}`);
