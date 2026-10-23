@@ -7,30 +7,24 @@ jobs:
   probe:
     runs-on: ubuntu-latest
     steps:
-      - name: Sydanmerkki criteria page
+      - name: Sydanmerkki criteria full text
         run: |
-          sudo apt-get install -y -qq poppler-utils >/dev/null 2>&1 || true
-          curl -sL 'https://www.sydanmerkki.fi/elintarviketeollisuus/tuotteiden_myontamisperusteet' -o k.html -w 'status %{http_code}\n'
-          grep -o -i 'href="[^"]*\.\(pdf\|xlsx\)[^"]*"' k.html | sort -u | head -20
+          curl -sL 'https://www.sydanmerkki.fi/elintarviketeollisuus/tuotteiden_myontamisperusteet' -o k.html
           python3 - <<'PY'
           import re,html
           s=open('k.html',encoding='utf-8',errors='ignore').read()
           s=re.sub(r'(?s)<(script|style|nav|header|footer)[^>]*>.*?</\1>',' ',s)
-          t=html.unescape(re.sub(r'<[^>]+>','\n',s))
-          lines=[l.strip() for l in t.split('\n') if l.strip()]
-          print('\n'.join(lines)[:5000])
+          s=re.sub(r'(?i)<(br|/p|/div|/li|/tr|/h\d|/td|/th)[^>]*>','\n',s)
+          t=html.unescape(re.sub(r'<[^>]+>',' ',s))
+          lines=[re.sub(r'\s+',' ',l).strip() for l in t.split('\n')]
+          lines=[l for l in lines if l]
+          i=max(i for i,l in enumerate(lines) if l.startswith('Tuotteelle voidaan myöntää Sydänmerkki'))
+          print('\n'.join(lines[i:]))
           PY
-          for P in $(grep -o -i 'href="[^"]*\.pdf[^"]*"' k.html | sed 's/href="//;s/"$//;s/&amp;/\&/g' | sort -u | head -3); do
-            echo "##### PDF $P"; curl -sL "$P" -o k.pdf && pdftotext -layout k.pdf - | head -700
-          done
-      - name: Open Food Facts product
-        run: |
-          curl -s -A 'FODMAP-tutka/1.0 (personal use)' 'https://world.openfoodfacts.org/api/v2/product/6430056590875.json?fields=product_name,ingredients_text_fi,ingredients_text,ingredients_text_en,nutriments,categories_tags' -w '\nstatus %{http_code}\n' | head -c 3000
-      - name: K-ruoka and Tokmanni
+      - name: Tokmanni search page
         run: |
           UA='Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130 Mobile Safari/537.36'
-          for u in 'https://www.k-ruoka.fi/haku?q=6408430000258' 'https://www.tokmanni.fi/catalogsearch/result/?q=6430056590875' 'https://www.tokmanni.fi/haku?q=6430056590875'; do
-            echo "=== $u"; curl -sL -A "$UA" "$u" -o p.html -w 'status %{http_code} size %{size_download} url %{url_effective}\n'
-            grep -o 'href="[^"]*\(tuote\|product\|\.html\)[^"]*"' p.html | sort -u | head -8
-            grep -o -i '.\{100\}ainesosat.\{200\}' p.html | head -2
-          done
+          curl -sL -A "$UA" 'https://www.tokmanni.fi/search/?q=6430056590875' -o t.html
+          grep -c 6430056590875 t.html; grep -o '.\{200\}6430056590875.\{200\}' t.html | head -3
+          grep -o -i '\(klevu\|algolia\|searchspring\|loop54\|findify\|doofinder\|elastic\|graphql\|api\)[^"'"'"' ]\{0,80\}' t.html | sort -u | head -20
+          grep -o 'href="https://www.tokmanni.fi/[^"]*"' t.html | sort -u | grep -v '/search' | head -5

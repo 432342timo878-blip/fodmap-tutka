@@ -259,7 +259,7 @@ export const INGREDIENTS: IngredientEntry[] = [
   e('kuivatut-hedelmat', 'Kuivatut hedelmät', 'high', ['fruktoosi', 'fruktaanit', 'polyolit'],
     ['taateli', 'viikuna', '^date', '^fig', 'dadel', 'fikon'],
     { note: 'Taatelit ja viikunat ovat runsas-FODMAP jo pieninä määrinä.' }),
-  e('rusina', 'Rusinat', 'moderate', ['fruktaanit'], ['rusina', 'raisin', 'russin', 'korintti', 'sultana'],
+  e('rusina', 'Rusinat', 'moderate', ['fruktaanit'], ['rusina', '=raisin', '=raisins', 'russin', 'korintti', 'sultana'],
     { note: 'Rusinat ovat vähä-FODMAP vain hyvin pienissä määrissä (n. 1 rkl).' }),
   e('litsi', 'Litsi', 'high', ['polyolit'], ['litsi', 'lychee', 'litchi']),
   e('goji', 'Gojimarja', 'moderate', ['fruktaanit'], ['goji']),
