@@ -7,31 +7,19 @@ jobs:
   probe:
     runs-on: ubuntu-latest
     steps:
-      - name: Shopify product data
+      - name: Ruohonjuuri product page
         run: |
-          for site in puhdasplus.fi www.ruohonjuuri.fi; do
-            echo "##### $site"
-            curl -s "https://$site/products.json?limit=250&page=1" -o p.json -w 'products.json status %{http_code} size %{size_download}\n'
-            python3 - <<'PY'
-          import json
-          try:
-              d=json.load(open('p.json'))
-          except Exception as e:
-              print('not json', e); raise SystemExit
-          ps=d.get('products',[])
-          print('products on page 1:', len(ps))
-          if ps:
-              v=ps[0]['variants'][0]
-              print('variant keys:', sorted(v.keys()))
-              print('product keys:', sorted(ps[0].keys()))
-          for p in ps:
-              if 'magnes' in p['title'].lower():
-                  print('---', p['title'], p['handle'], p.get('vendor'), [ (v.get('barcode'), v.get('sku')) for v in p['variants']][:3])
-                  print(p['body_html'][:1500].replace('\n',' '))
-                  break
-          PY
-          done
-          H=$(curl -s 'https://www.ruohonjuuri.fi/search?q=iltamagnesium' | grep -o '/products/[^"?]*iltamagnesium[^"?]*' | head -1)
-          echo "ruohonjuuri handle: $H"
-          [ -n "$H" ] && curl -s "https://www.ruohonjuuri.fi$H.js" | python3 -c "import json,sys; p=json.load(sys.stdin); print(p['title'], p.get('vendor')); print([(v.get('barcode'),v.get('sku')) for v in p['variants']]); print(p['description'][:2500])"
-          curl -s 'https://puhdasplus.fi/products/night-time-magnesium-120-kaps.js' | python3 -c "import json,sys; p=json.load(sys.stdin); print(p['title']); print([(v.get('barcode'),v.get('sku')) for v in p['variants']]); print(p['description'][:2500])" || true
+          curl -s 'https://www.ruohonjuuri.fi/products/puhdistamo-iltamagnesium-120-kps-104-g' -o p.html -w 'status %{http_code} size %{size_download}\n'
+          grep -o -i '.\{120\}\(ravintosisältö\|päiväannos\|vuorokausiannos\|4 kapselia\|sisältää\).\{300\}' p.html | sed 's/<[^>]*>/ /g' | tr -s ' ' | head -8
+          echo "--- mg/µg mentions"
+          sed 's/<[^>]*>/\n/g' p.html | grep -i -E '[0-9] ?(mg|µg|mcg)' | tr -s ' ' | sort -u | head -30
+          echo "--- metafield-ish"
+          grep -o -i '"\(ingredients\|nutrition\|ainesosat\|ravinto\)[a-z_]*" *: *"[^"]\{0,400\}' p.html | head -5
+          echo "--- products.json page count"
+          for i in 5 10 20 30 40; do echo "page $i: $(curl -s "https://www.ruohonjuuri.fi/products.json?limit=250&page=$i" | python3 -c 'import json,sys; print(len(json.load(sys.stdin)["products"]))')"; done
+          curl -s "https://www.ruohonjuuri.fi/products.json?limit=250&page=1" | python3 -c '
+          import json,sys,collections
+          ps=json.load(sys.stdin)["products"]
+          print(collections.Counter(p["product_type"] for p in ps).most_common(15))
+          import re
+          print("sku with ean:", sum(1 for p in ps for v in p["variants"] if v.get("sku") and re.search(r"\d{13}$", v["sku"])), "of", sum(len(p["variants"]) for p in ps))'
