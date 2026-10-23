@@ -28,6 +28,11 @@ describe('parseSupplementText', () => {
     expect(parseSupplementText(lines).amounts).toEqual({ magnesium: 125 });
   });
 
+  it('reads shop tables with dose ranges as the upper end', () => {
+    const table = 'Ravintosisältö | 2–6 mittalusikallista\nMagnesium | 76–228 mg (20–60 %*)\nKalium | 386–1158 mg\nKalsium / Kalcium | 148–444 mg';
+    expect(parseSupplementText(table)).toEqual({ amounts: { magnesium: 228, potassium: 1158, calcium: 444 }, doseUnits: 6 });
+  });
+
   it('converts IU and units, and sums EPA and DHA', () => {
     expect(parseSupplementText('Vitamin D3 2000 IU').amounts.vitD).toBe(50);
     expect(parseSupplementText('Magnesium 0,3 g').amounts.magnesium).toBe(300);

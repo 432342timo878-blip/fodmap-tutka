@@ -31,14 +31,21 @@ const decode = (s) =>
     .replace(/&#x([0-9a-f]+);/gi, (_, n) => String.fromCodePoint(parseInt(n, 16)))
     .replace(/&([a-z]+);/gi, (m, n) => ENTITIES[n] ?? m);
 
-function htmlLines(html) {
-  const text = decode(
+function stripTags(html) {
+  return (
     html
-      .replace(/<(script|style|noscript)[^>]*>[\s\S]*?<\/\1>/gi, ' ')
-      .replace(/<(br|\/p|\/div|\/li|\/tr|\/h\d|\/td|\/th)[^>]*>/gi, '\n')
-      .replace(/<[^>]+>/g, ' '),
+      // Taulukon solut samalle riville ("Magnesium | 125 mg"), rivit omilleen.
+      .replace(/<\/(td|th)>/gi, ' | ')
+      .replace(/<(br|\/p|\/div|\/li|\/tr|\/h\d|\/table)[^>]*>/gi, '\n')
+      .replace(/<[^>]+>/g, ' ')
   );
-  return text.split('\n').map((l) => l.replace(/\s+/g, ' ').trim()).filter(Boolean);
+}
+
+function htmlLines(html) {
+  const withoutScripts = html.replace(/<(script|style|noscript)[^>]*>[\s\S]*?<\/\1>/gi, ' ');
+  // Osa kaupoista tallentaa taulukon koodattuna (&lt;table&gt;): puretaan ja siistitään toiseen kertaan.
+  const text = stripTags(decode(stripTags(withoutScripts)).replace(/\\u003c/g, '<').replace(/\\u003e/g, '>'));
+  return text.split('\n').map((l) => l.replace(/\s+/g, ' ').trim().replace(/^\|\s*|\s*\|$/g, '').trim()).filter(Boolean);
 }
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
