@@ -39,7 +39,7 @@ Run `npm test` and `npm run typecheck` before declaring any task done.
 - `src/data/sydanmerkki.json` – Sydänmerkki product names, refreshed by `scripts/fetch-sydanmerkki.mjs` in the APK workflow (the site has no barcodes, so products are matched by name).
 - `plugins/withScannerFixes.js` – Android config: R8 off (expo-camera looks up ML Kit by class name), Play Store package query, ML Kit model preload.
 - The APK is built by `.github/workflows/android-apk.yml`; the user installs it from the run's artifacts.
-- `src/data/supplements-db.json` – supplement barcodes + label lines from Finnish health-store Shopify catalogues (Ruohonjuuri, Puhdas+), collected by `scripts/fetch-supplements.mjs` at most weekly in the APK workflow (Actions cache). Parsed at runtime by `parseSupplementText`, so parser fixes apply to it.
+- `src/data/supplements-db.json` – supplement barcodes + label lines from Finnish health-store Shopify catalogues (Ruohonjuuri, Apteekki360, Puhdas+, Puhdistamo; ~1000 products as of 10/2026), collected by `scripts/fetch-supplements.mjs` in the APK workflow (Actions cache, keyed by ISO week + script hash; counts are printed as `::notice` annotations). Products without barcodes are found by name search. Parsed at runtime by `parseSupplementText`, so parser fixes apply to it. Shops that block datacenter IPs (see `docs/store-data-findings.md`) can't be collected in CI.
 - `src/supplements/` – supplement stack: nutrient reference intakes (EU RI) and upper limits (EFSA UL), label parsing (store pages, OCR), and rule-based stack checks (no AI, by the user's choice: no pay-per-use APIs).
 - UI text is Finnish.
 
