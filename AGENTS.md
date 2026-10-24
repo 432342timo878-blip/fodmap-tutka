@@ -1,5 +1,9 @@
 This is an Expo/React Native mobile application. Prioritize mobile-first patterns, performance, and cross-platform compatibility.
 
+FODMAP-tutka has its own repository: GitHub `432342timo878-blip/fodmap-tutka` (branch `main`), on the user's PC in
+`C:\Users\timo8\Documents\GitHub\fodmap-tutka`. Until 10/2026 it was the branch `ccr-78cca8a2-80c1pi` of `llookjbb`, which is the
+user's unrelated track & field game: never work on this app there. The repository is public (no secrets in it; keep it that way).
+
 ## Expo has changed — do not trust your training data
 
 Expo ships breaking changes every SDK release. APIs you remember are likely renamed, moved, or removed. Before writing any code that touches an Expo, EAS, or React Native API:
