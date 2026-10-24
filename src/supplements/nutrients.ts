@@ -62,18 +62,24 @@ export const NUTRIENT_BY_ID = Object.fromEntries(NUTRIENTS.map((n) => [n.id, n])
 
 export type NutrientAmounts = Partial<Record<NutrientId, number>>;
 
-// "1 000 mg", "2,5 µg", "1000 IU". Prosenttiluvut (viitearvosta) ohitetaan.
-const AMOUNT = /(\d{1,3}(?:[  ]\d{3})+|\d+(?:[.,]\d+)?)\s*(µg|μg|mcg|ug|mg|g|iu|ky|ie)(?![a-zåäö])/g;
+// "1 000 mg", "2,5 µg", "1000 IU", "20 mikrog" (apteekkien tuotetiedot). Prosenttiluvut (viitearvosta) ohitetaan.
+const AMOUNT = /(\d{1,3}(?:[  ]\d{3})+|\d+(?:[.,]\d+)?)\s*(µg|μg|mcg|ug|mikrog(?:ramm?aa?)?|mg|g|iu|ky|ie)(?![a-zåäö])/g;
 const MAX_GAP = 45;
 
 function convert(value: number, unit: string, def: NutrientDef): number | undefined {
-  const u = unit === 'μg' || unit === 'mcg' || unit === 'ug' ? 'µg' : unit;
+  const u = unit === 'μg' || unit === 'mcg' || unit === 'ug' || unit.startsWith('mikrog') ? 'µg' : unit;
   if (u === 'iu' || u === 'ky' || u === 'ie') return def.perIU !== undefined ? value * def.perIU : undefined;
   const toMg: Record<string, number> = { 'µg': 0.001, mg: 1, g: 1000 };
   const fromMg: Record<Unit, number> = { 'µg': 1000, mg: 1, g: 0.001 };
   if (!(u in toMg)) return undefined;
   return Math.round(value * toMg[u] * fromMg[def.unit] * 1000) / 1000;
 }
+
+/**
+ * Suurin uskottava annos: pakkauskoko ("Magnesiumglysinaatti 200 g") tai lukuvirhe ei ole ravintoaineen määrä.
+ * 10 × saannin yläraja, tai ilman ylärajaa 5000 × vertailuarvo (esim. B12 5000 µg on vielä uskottava).
+ */
+const maxPlausible = (def: NutrientDef) => (def.ul ? def.ul * 10 : def.ri ? def.ri * 5000 : Infinity);
 
 function amountAfter(text: string, from: number, def: NutrientDef): number | undefined {
   const tail = text.slice(from, from + MAX_GAP + 25);
@@ -83,7 +89,7 @@ function amountAfter(text: string, from: number, def: NutrientDef): number | und
     if (m.index > MAX_GAP) return undefined;
     const value = parseFloat(m[1].replace(/[  ]/g, '').replace(',', '.'));
     const converted = convert(value, m[2], def);
-    if (converted !== undefined) return converted;
+    if (converted !== undefined && converted <= maxPlausible(def)) return converted;
   }
   return undefined;
 }
@@ -127,7 +133,7 @@ export function parseSupplementText(raw: string): ParsedLabel {
     if (e !== undefined || d !== undefined) amounts.omega3 = (e ?? 0) + (d ?? 0);
   }
 
-  const dose = text.match(/(päivä(?:annos|ittäis(?:annos)?)|annos|vuorokausiannos|daily dose|per)\s*\(?\s*(\d+)\s*(tabletti|tablettia|kapseli|kapselia|pastilli|pastillia|purutabletti|purutablettia|annospussi|mittalusikallinen|tippa|tippaa|tabs?|caps|softgels?|gummies|kumi|kpl|kps|kaps)/);
+  const dose = text.match(/(päivä(?:annos|ittäis(?:annos)?)|annos|vuorokausiannos|daily dose|per)[\s,:|]*\(?\s*(\d+)\s*(tabletti|tablettia|kapseli|kapselia|pastilli|pastillia|purutabletti|purutablettia|poretabletti|poretablettia|annospussi|mittalusikallinen|tippa|tippaa|tabs?|caps|softgels?|gummies|kumi|kpl|kps|kaps)/);
   if (dose) return { amounts, doseUnits: parseInt(dose[2], 10) };
   // Taulukon otsikko voi olla vaihteluväli ("2–6 mittalusikallista"): määrät on silloin annettu
   // vaihteluvälinä ("76–228 mg"), ja luemme ylärajan – se vastaa suurinta kappalemäärää.

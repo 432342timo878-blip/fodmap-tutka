@@ -37,10 +37,37 @@ Datacenters get a CloudFront 403. A department store: no bread or dairy (2/6 tes
 
 Lookup order in the app: Open Food Facts → S-kaupat API and Tokmanni (direct, in parallel) → K-Ruoka (WebView). Products with ingredients but no nutrition in Open Food Facts get their nutrition from S-kaupat.
 
-## Health stores and pharmacies (supplement database, `scripts/fetch-supplements.mjs`)
-- Shopify catalogues: `/products.json?limit=250&page=N` (title, vendor, product_type, tags, body_html, variants[].sku)
-  and `/products/<handle>.js` (variants[].barcode). Ruohonjuuri (~4300 products, SKU ends with the EAN),
-  Apteekki360 (~7400, SKU is a pharmacy code; EAN via `.js`), Puhdas+ (no barcodes), Puhdistamo.
-- Nutrient tables are in `body_html` (Puhdas+, Puhdistamo) or only in the rendered product page (Ruohonjuuri).
-- Yliopiston Apteekki: Magento, reachable, sitemap at `/pub/media/sitemap.xml`; not yet used.
-- Life (503) and Sokos (403) block servers.
+## Health stores, pharmacies and sports shops (supplement database, `scripts/fetch-supplements.mjs`)
+Checked 24.10.2026 from a home connection (curl + the collector's sample mode, `SAMPLE=25`); reachability from GitHub Actions
+is in "From GitHub Actions" below. Each shop is collected in its own parallel job in the APK workflow (`supplements` matrix);
+the build job merges the parts. Collecting all shops one after another took >30 min with only four shops.
+
+| Shop | Platform | Product list | Barcode | Vitamin/mineral table |
+|---|---|---|---|---|
+| Ruohonjuuri | Shopify | `/products.json` (~4300) | SKU ends with the EAN | rendered product page only |
+| Apteekki360 | Shopify | `/products.json` (~7400) | `/products/<handle>.js` `variants[].barcode` | `body_html` or page |
+| Puhdas+ | Shopify | `/products.json` (~230) | none (name search) | `body_html` |
+| Puhdistamo | Shopify | `/products.json` (~170) | SKU | `body_html` |
+| Aminopörssi | Shopify | `/products.json` is closed (429 `local_rate_limited`), but `/collections/all/products.json` works (~4700) | `.js` `barcode` / page `gtin13` | `body_html` ("Ravintosisältö … Per annos … % NRV") |
+| Yliopiston Apteekki | Magento 2, Cloudflare | GraphQL `POST /graphql`: `products(filter:{category_id:{in:[…]}})`; category 6412 "Vitamiinit ja ravintolisät" (1087), 4030 lasten, 4129 raskaus, 2887 iho- ja hiusravintolisät | `custom_attributesV2` → `ean_barcode` | `composition_description` ("Vuorokausiannos, 1 tabletti sisältää: … D3-vitamiini 20 mikrog (400 %*)", one line, units "mikrog") |
+| Minimani | Magento 2 | GraphQL, category 424818 "Terveystuotteet ja urheilu" (885) | SKU = EAN | only `description` prose (the page is rendered in the browser; no table in the HTML) |
+| Fiksuapteekki | WooCommerce | Store API `/wp-json/wc/store/v1/products?per_page=100&page=N` (~1800, no auth) | SKU = EAN | `description` ("D3-vitamiini (kolekalsiferoli) 50 µg – 1000 %*") |
+| PUR-kauppa (terveyskauppa.fi redirects here) | WooCommerce | Store API (~2500), category "Ravintolisät" | SKU = EAN | `description`, else product page |
+| ApteekkiShop | Vilkas (ePages) | REST `https://www.apteekkishop.fi/rs/shops/ApteekkiShop/products?resultsPerPage=100&page=N` (~9900, header `Accept: application/vnd.epages.v1+json`) | `ean` | `description` |
+| Lisäravinnekauppa | Vilkas (ePages) | REST `/rs/shops/lisaravinnekauppa` (152; the address is in the page as `"RESTAPIURL"`) | mostly empty | `description` |
+| Tokmanni | Magento + Klevu | Klevu search (see Tokmanni above) with category words ("Terveysravinteet ja -valmisteet" 457, "Urheiluravinteet" 189, …), kept when `klevu_category` is a health/sports category (~630) | Klevu `sku` = EAN | product page, "Käyttöohjeet" block ("1 TABL SISÄLTÄÄ: D3-vitamiini 50 µg 1000% RI"); many pages have no amounts |
+| MyProtein | THG (Astro) | `sitemapindex-product.xml.gz` → `/p/lisaravinteet|vitamins|myvitamins/` (~270 of 1418; the rest is clothing) | JSON-LD `gtin13` (every flavour) | `<div id="nutritionalinfo">` table; cut before "Select this product" recommendations |
+| Bodykauppa | own platform | `index_sitemap.xml` → `product_sitemap_part_*_fi.xml` (~2600) | EAN at the end of the URL, JSON-LD `gtin` | HTML-encoded in the page state (`description3&quot;:&quot;&lt;p&gt;…`), not in the visible text |
+
+Not collected:
+- **Verkkoapteekki** (Vilkas/ePages): the label text is on the product page ("Yksi tabletti sisältää: D3-vitamiinia 20 mikrog"),
+  but the REST API is switched off (`/rs/shops/verkkoapteekki` → 500), the page has no barcode and the sitemap has ~18 000 URLs.
+- **Fitnesstukku** (Salesforce Commerce Cloud, same group as Gymgrossisten/Bodystore): ~5400 product URLs in `sitemap_0.xml`, tables
+  on the page (cells as `<td><p>…</p></td>`), but no barcode anywhere → only name search; too heavy for that. Could be added later.
+- **Life**: "Offline for maintenance" (503) also from a home connection 24.10.2026; earlier 503 to servers.
+- **Benu**: no answer (connection fails) 24.10.2026.
+- **Apteekki.fi**: a pharmacy finder of the pharmacists' association, not a shop. **Avainapteekit**: WordPress info site, no shop found.
+- **Apotek / Apteekkituote / Proteiinikauppa**: no such Finnish domains answer (apotek.fi, apteekkituote.fi, proteiinikauppa.fi/.com).
+- **Verkkokauppa.com**: sells a few supplements, 56 product sitemaps × 5000 URLs without categories in the URL; no open API found.
+- Small or not supplement shops: Gymstore (equipment), Foodin (food), Elixi (oils), Bioteekki (49 own products, no barcodes),
+  Terveyspuoti (Quickbutik, no barcodes found), Vitabalans (manufacturer site, no EAN), Fitshop (equipment), Sokos (403 to servers).

@@ -39,6 +39,21 @@ describe('parseSupplementText', () => {
     expect(parseSupplementText('Kalaöljy 1000 mg, josta EPA 330 mg ja DHA 220 mg').amounts.omega3).toBe(550);
     expect(parseSupplementText('Kreatiinimonohydraatti 3 g').amounts.creatine).toBe(3);
   });
+
+  it('reads pharmacy product texts that write micrograms as "mikrog"', () => {
+    const text = 'Vuorokausiannos, 1 tabletti sisältää: tyrnin bioflavonoidit 10 mg, D3-vitamiini 20 mikrog (400 %*). Foolihappo 400 mikrogrammaa';
+    expect(parseSupplementText(text)).toEqual({ amounts: { vitD: 20, b9: 400 }, doseUnits: 1 });
+  });
+
+  it('skips pack sizes that follow a nutrient name', () => {
+    expect(parseSupplementText('Feel Vivid Magnesiumglysinaatti 200 g\nMagnesium | 150 mg').amounts).toEqual({ magnesium: 150 });
+    expect(parseSupplementText('Magnesium Carbonate, 55 g pala').amounts).toEqual({});
+  });
+
+  it('reads the dose from table headers and effervescent tablets', () => {
+    expect(parseSupplementText('Per Päiväannos | | | 2 Kapselia\nMagnesium | | 150 mg | 40%*').doseUnits).toBe(2);
+    expect(parseSupplementText('Vuorokausiannos 1 poretabletti sisältää: C-vitamiini 500 mg').doseUnits).toBe(1);
+  });
 });
 
 describe('assessStack', () => {

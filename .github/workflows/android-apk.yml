@@ -12,7 +12,57 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # Lisäravinnetietokanta kerätään kauppojen sivuilta enintään kerran viikossa (ja heti, kun
+  # keräysskripti muuttuu). Jokainen kauppa omassa rinnakkaisessa ajossaan, jotta APK valmistuu
+  # ajoissa; yksi estynyt kauppa ei kaada muita. Lista = SHOPS skriptissä scripts/fetch-supplements.mjs.
+  supplements:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    continue-on-error: true
+    strategy:
+      fail-fast: false
+      matrix:
+        shop: [ruohonjuuri, puhdasplus, puhdistamo, apteekki360, aminoporssi, yliopistonapteekki, minimani, fiksuapteekki, purkauppa, apteekkishop, lisaravinnekauppa, tokmanni, myprotein, bodykauppa]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Week number
+        id: week
+        run: echo "week=$(date -u +%G-%V)" >> "$GITHUB_OUTPUT"
+
+      - name: Restore ${{ matrix.shop }}
+        id: cache
+        uses: actions/cache/restore@v4
+        with:
+          path: supplement-parts/${{ matrix.shop }}.json
+          key: supplements-${{ matrix.shop }}-${{ steps.week.outputs.week }}-${{ hashFiles('scripts/fetch-supplements.mjs') }}
+
+      - name: Collect ${{ matrix.shop }}
+        id: fetch
+        if: steps.cache.outputs.cache-hit != 'true'
+        run: node scripts/fetch-supplements.mjs ${{ matrix.shop }}
+
+      - name: Save ${{ matrix.shop }}
+        if: steps.fetch.outcome == 'success'
+        uses: actions/cache/save@v4
+        with:
+          path: supplement-parts/${{ matrix.shop }}.json
+          key: supplements-${{ matrix.shop }}-${{ steps.week.outputs.week }}-${{ hashFiles('scripts/fetch-supplements.mjs') }}
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: supplements-${{ matrix.shop }}
+          path: supplement-parts/${{ matrix.shop }}.json
+          if-no-files-found: ignore
+          retention-days: 7
+
   build:
+    needs: supplements
+    if: ${{ !cancelled() }}
     runs-on: ubuntu-latest
     timeout-minutes: 60
     steps:
@@ -38,31 +88,18 @@ jobs:
         continue-on-error: true
         run: node scripts/fetch-sydanmerkki.mjs
 
-      # Lisäravinnetietokanta kerätään terveyskauppojen sivuilta enintään kerran viikossa
-      # (ja heti, kun keräysskripti muuttuu).
-      - name: Week number
-        id: week
-        run: echo "week=$(date -u +%G-%V)" >> "$GITHUB_OUTPUT"
-
-      - name: Restore supplement database
-        id: supp-cache
-        uses: actions/cache/restore@v4
-        with:
-          path: src/data/supplements-db.json
-          key: supplements-db-${{ steps.week.outputs.week }}-${{ hashFiles('scripts/fetch-supplements.mjs') }}
-
-      - name: Update supplement database
-        id: supp-fetch
-        if: steps.supp-cache.outputs.cache-hit != 'true'
+      - name: Download supplement parts
         continue-on-error: true
-        run: node scripts/fetch-supplements.mjs
-
-      - name: Save supplement database
-        if: steps.supp-fetch.outcome == 'success'
-        uses: actions/cache/save@v4
+        uses: actions/download-artifact@v4
         with:
-          path: src/data/supplements-db.json
-          key: supplements-db-${{ steps.week.outputs.week }}-${{ hashFiles('scripts/fetch-supplements.mjs') }}
+          pattern: supplements-*
+          path: supplement-parts
+          merge-multiple: true
+
+      # Yhteismäärä kaupoittain näkyy ajon yhteenvedossa (::notice).
+      - name: Merge supplement database
+        continue-on-error: true
+        run: node scripts/fetch-supplements.mjs --merge
 
       - name: Test
         run: |

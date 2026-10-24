@@ -36,6 +36,9 @@ yarn-error.*
 # typescript
 *.tsbuildinfo
 
+# supplement database parts (scripts/fetch-supplements.mjs)
+supplement-parts/
+
 # generated native folders
 /ios
 /android
