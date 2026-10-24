@@ -59,6 +59,13 @@ the build job merges the parts. Collecting all shops one after another took >30 
 | MyProtein | THG (Astro) | `sitemapindex-product.xml.gz` → `/p/lisaravinteet|vitamins|myvitamins/` (~270 of 1418; the rest is clothing) | JSON-LD `gtin13` (every flavour) | `<div id="nutritionalinfo">` table; cut before "Select this product" recommendations |
 | Bodykauppa | own platform | `index_sitemap.xml` → `product_sitemap_part_*_fi.xml` (~2600) | EAN at the end of the URL, JSON-LD `gtin` | HTML-encoded in the page state (`description3&quot;:&quot;&lt;p&gt;…`), not in the visible text |
 
+### From GitHub Actions (first run in the own repository, 24.10.2026)
+All 14 shops answer GitHub's servers. Products in the database / time of the shop's job:
+Aminopörssi 911 (22.5 min), Bodykauppa 883 (15.6), Fiksuapteekki 785 (3.3), Yliopiston Apteekki 631 (3.4), Apteekki360 542 (17.0),
+Ruohonjuuri 474 (9.6), ApteekkiShop 192 (4.3), MyProtein 135 (1.0), Minimani 112 (2.6), PUR-kauppa 103 (8.7), Puhdas+ 83 (2.1),
+Puhdistamo 78 (4.8), Tokmanni 59 (3.1; 6 product pages 404), Lisäravinnekauppa 38 (0.1). Merged: 3350 different products,
+3102 barcodes (products sold in several shops are combined). The whole run took ~35 min with the APK build.
+
 Not collected:
 - **Verkkoapteekki** (Vilkas/ePages): the label text is on the product page ("Yksi tabletti sisältää: D3-vitamiinia 20 mikrog"),
   but the REST API is switched off (`/rs/shops/verkkoapteekki` → 500), the page has no barcode and the sitemap has ~18 000 URLs.
