@@ -63,6 +63,9 @@ jobs:
   build:
     needs: supplements
     if: ${{ !cancelled() }}
+    # Tietokannan julkaisu GitHubin julkaisuun (Publish supplement database).
+    permissions:
+      contents: write
     runs-on: ubuntu-latest
     timeout-minutes: 60
     steps:
@@ -98,8 +101,22 @@ jobs:
 
       # Yhteismäärä kaupoittain näkyy ajon yhteenvedossa (::notice).
       - name: Merge supplement database
+        id: merge
         continue-on-error: true
         run: node scripts/fetch-supplements.mjs --merge
+
+      # Sovellus hakee tietokannan täältä kerran viikossa (src/supplements/dbUpdate.ts), joten uusia tuotteita
+      # saa ilman uutta APK:ta. Vain main-haarasta.
+      - name: Publish supplement database
+        if: github.ref == 'refs/heads/main' && steps.merge.outcome == 'success'
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release view supplements-db --repo "$GITHUB_REPOSITORY" > /dev/null 2>&1 || \
+            gh release create supplements-db --repo "$GITHUB_REPOSITORY" --title "Lisäravinnetietokanta" \
+              --notes "FODMAP-tutka hakee tämän tiedoston kerran viikossa. Päivittyy automaattisesti jokaisessa käännöksessä."
+          gh release upload supplements-db src/data/supplements-db.json --repo "$GITHUB_REPOSITORY" --clobber
 
       - name: Test
         run: |

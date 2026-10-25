@@ -3,7 +3,7 @@ import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TextInput, 
 
 import { Button } from '../components/Button';
 import { assessStack, daysLeft, Level, Supplement } from '../supplements/assess';
-import { DbMatch, searchSupplements, supplementDbSize } from '../supplements/database';
+import { DbMatch, searchSupplements, supplementDbInfo } from '../supplements/database';
 import { formatAmount, NUTRIENT_BY_ID } from '../supplements/nutrients';
 import { colors } from '../theme';
 
@@ -28,6 +28,7 @@ export function SupplementsScreen({ supplements, busy, onScan, onAddManually, on
   const { totals, warnings } = assessStack(supplements);
   const [query, setQuery] = useState('');
   const results = query.trim().length >= 2 ? searchSupplements(query) : [];
+  const supplementDbSize = supplementDbInfo().size;
 
   return (
     <ScrollView contentContainerStyle={styles.container}>

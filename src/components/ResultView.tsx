@@ -157,6 +157,7 @@ const SOURCE_LABEL: Record<Product['source'], string> = {
   tokmanni: ' · Tokmanni',
   manual: ' · oma merkintä',
   web: ' · jaettu sivu',
+  supplementDb: ' · lisäravinnetietokanta',
 };
 
 function FindingRow({ finding }: { finding: Finding }) {

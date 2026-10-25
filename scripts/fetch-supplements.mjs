@@ -22,11 +22,12 @@ const SHOPIFY_SUPPLEMENT = /vitamin|supplement|ravintolis|lisäravin|nutrition|p
  */
 const SHOPS = {
   ruohonjuuri: { name: 'Ruohonjuuri', kind: 'shopify', host: 'www.ruohonjuuri.fi' },
-  puhdasplus: { name: 'Puhdas+', kind: 'shopify', host: 'puhdasplus.fi', allProducts: true },
-  puhdistamo: { name: 'Puhdistamo', kind: 'shopify', host: 'www.puhdistamo.fi', allProducts: true },
+  // supplementShop: kauppa myy vain lisäravinteita ja urheiluravinteita, joten ainesosat riittävät tuotteeksi.
+  puhdasplus: { name: 'Puhdas+', kind: 'shopify', host: 'puhdasplus.fi', allProducts: true, supplementShop: true },
+  puhdistamo: { name: 'Puhdistamo', kind: 'shopify', host: 'www.puhdistamo.fi', allProducts: true, supplementShop: true },
   apteekki360: { name: 'Apteekki360', kind: 'shopify', host: 'www.apteekki360.fi' },
   // /products.json on suljettu, kokoelman kautta sama lista vastaa.
-  aminoporssi: { name: 'Aminopörssi', kind: 'shopify', host: 'www.aminoporssi.fi', productsPath: '/collections/all/products.json' },
+  aminoporssi: { name: 'Aminopörssi', kind: 'shopify', host: 'www.aminoporssi.fi', productsPath: '/collections/all/products.json', supplementShop: true },
   // Vitamiinit ja ravintolisät, lasten ja raskausajan vitamiinit, iho- ja hiusravintolisät.
   yliopistonapteekki: { name: 'Yliopiston Apteekki', kind: 'magento', host: 'www.yliopistonapteekki.fi', categories: ['6412', '4030', '4129', '2887'] },
   minimani: { name: 'Minimani', kind: 'magento', host: 'www.minimani.fi', categories: ['424818'] },
@@ -34,7 +35,7 @@ const SHOPS = {
   // terveyskauppa.fi ohjaa tänne.
   purkauppa: { name: 'PUR-kauppa', kind: 'woo', host: 'pur-kauppa.fi', categories: /ravintolis|vitamiin|kivennäis|urheilu|omega/i },
   apteekkishop: { name: 'ApteekkiShop', kind: 'epages', api: 'https://www.apteekkishop.fi/rs/shops/ApteekkiShop' },
-  lisaravinnekauppa: { name: 'Lisäravinnekauppa', kind: 'epages', api: 'https://www.lisaravinnekauppa.fi/rs/shops/lisaravinnekauppa' },
+  lisaravinnekauppa: { name: 'Lisäravinnekauppa', kind: 'epages', api: 'https://www.lisaravinnekauppa.fi/rs/shops/lisaravinnekauppa', supplementShop: true },
   tokmanni: {
     name: 'Tokmanni',
     kind: 'klevu',
@@ -45,6 +46,7 @@ const SHOPS = {
   },
   myprotein: {
     name: 'MyProtein',
+    supplementShop: true,
     kind: 'sitemap',
     sitemaps: ['https://www.myprotein.fi/sitemapindex-product.xml.gz'],
     urls: /\/p\/(lisaravinteet|vitamins|myvitamins)/,
@@ -53,6 +55,7 @@ const SHOPS = {
   },
   bodykauppa: {
     name: 'Bodykauppa',
+    supplementShop: true,
     kind: 'sitemap',
     sitemaps: ['https://bodykauppa.fi/index_sitemap.xml'],
     urls: /\/product\//,
@@ -76,8 +79,9 @@ const SAMPLE = Number(process.env.SAMPLE) || 0;
 const NUTRIENT_AMOUNT =
   /(vitamiini|vitamin|magnesium|kalsium|sinkki|rauta|jodi|seleeni|kromi|kalium|omega|epa|dha|kreatiini|foolihappo|folaatti|biotiini|b12|b6|tiamiini|riboflaviini|niasiini)[^\n]{0,45}\d[\d,.]*\s*(mg|µg|μg|mcg|mikrog|g|iu|ky)/i;
 const AMOUNT_LINE = /\d[\d,.]*\s*(mg|µg|μg|mcg|ug|mikrog|g|iu|ky)(?![a-zåäö])|annos|kapseli|tabletti|pastilli|ravintosisältö|sisältää|ravintolisä/i;
-// "Ainesosat: ..." (ei pelkkää otsikkoa "Ainesosat/Ingredienser").
-const INGREDIENTS = /^(ainesosat|ainekset|raaka-aineet)(?![/a-zåäö])\s*:?\s*/i;
+// Lisäravinteen tuntomerkit (pakkauksessa on aina sana "ravintolisä"), ja kosmetiikan INCI-luettelo, jota ei oteta.
+const SUPPLEMENT_WORDS = /ravintolisä|kosttillskott|food supplement|lisäravinne|urheiluravinne|proteiinijauhe|kreatiini|aminohappo/i;
+const COSMETIC = /\baqua\b|glycerin\b|parfum|sodium laur|cetearyl|dimethicone|tocopheryl acetate/i;
 
 const ENTITIES = { auml: 'ä', ouml: 'ö', aring: 'å', Auml: 'Ä', Ouml: 'Ö', Aring: 'Å', uuml: 'ü', nbsp: ' ', amp: '&', lt: '<', gt: '>', quot: '"', apos: "'", micro: 'µ', deg: '°', ndash: '–', mdash: '—' };
 const decode = (s) =>
@@ -216,14 +220,20 @@ async function finish(shop, item, examples) {
     lines = htmlLines(shop.extract ? shop.extract(html) : html);
     labelText = labelFrom(lines);
   }
-  if (!NUTRIENT_AMOUNT.test(labelText)) {
+  const ingredients = plain(item.ingredients) ?? findIngredients(lines);
+  const hasAmounts = NUTRIENT_AMOUNT.test(labelText);
+  // Ilman vitamiinitaulukkoa tuote kelpaa, jos siitä on ainesosat (FODMAP-arvio) ja se on lisäravinne, ei esim. voide.
+  const keepForIngredients =
+    !hasAmounts && ingredients && !COSMETIC.test(ingredients) && (shop.supplementShop || SUPPLEMENT_WORDS.test(`${item.name ?? ''}\n${lines.join('\n')}`));
+  if (!hasAmounts && !keepForIngredients) {
     if (SAMPLE && examples.n++ < 3) {
       const amountLines = lines.filter((l) => /\d\s*(mg|µg|μg|mcg|mikrog)/i.test(l)).slice(0, 6);
       console.log(`--- ${shop.name} ei määriä: ${item.name ?? item.page}\n${amountLines.join('\n') || '(ei yhtään mg/µg-riviä)'}`);
     }
-    count('ei määriä');
+    count('ei määriä eikä ainesosia');
     return null;
   }
+  if (!hasAmounts) labelText = '';
 
   const meta = html ? pageMeta(html) : { eans: new Set() };
   const eans = new Set((item.eans ?? []).map(String).filter(isEan));
@@ -236,15 +246,29 @@ async function finish(shop, item, examples) {
   }
   // Ilman viivakoodia tuote löytyy sovelluksessa nimihaulla.
   count(eans.size === 0 ? 'vain nimellä' : 'viivakoodilla');
-  const ingredients = plain(item.ingredients) ?? lines.find((l) => INGREDIENTS.test(l) && l.replace(INGREDIENTS, '').length > 10)?.replace(INGREDIENTS, '');
+  if (!hasAmounts) count('vain ainesosat');
   return {
     eans: [...eans],
     name,
     brand: plain(item.brand) ?? meta.brand ?? undefined,
     shop: shop.name,
     labelText,
-    ingredients: ingredients?.replace(INGREDIENTS, '') || undefined,
+    ingredients: ingredients || undefined,
   };
+}
+
+/**
+ * Ainesosaluettelo: "Ainesosat: …" rivin alussa tai keskellä (apteekkien yhden rivin kuvaus), tai pelkän
+ * otsikon ("Ainesosat/Ingredienser") jälkeinen rivi. Luettelo päättyy ensimmäiseen uuteen virkkeeseen.
+ */
+function findIngredients(lines) {
+  for (let i = 0; i < lines.length; i++) {
+    const heading = lines[i].match(/^(ainesosat|ainekset|raaka-aineet)(\/[a-zåäö]+)?\s*:?\s*$/i);
+    const inline = lines[i].match(/(?:^|[\s.:])(?:ainesosat|ainekset|raaka-aineet)\s*:\s*(.{10,})/i);
+    const text = heading ? lines[i + 1] : inline?.[1];
+    if (text && text.length >= 10) return text.split(/\.\s+(?=[A-ZÅÄÖ])/)[0].replace(/\.$/, '').slice(0, 800).trim();
+  }
+  return undefined;
 }
 
 // ---- Tuotelistat kaupoittain: palauttavat { total, items } ----

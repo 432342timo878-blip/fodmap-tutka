@@ -1,18 +1,35 @@
+import { useState } from 'react';
 import { Alert, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
 
 import { Button } from '../components/Button';
 import { FodmapGroup, GROUP_DESCRIPTIONS, GROUP_LABELS } from '../data/ingredients';
 import { clearHistory, Settings } from '../storage';
+import { supplementDbInfo } from '../supplements/database';
+import { UpdateResult } from '../supplements/dbUpdate';
 import { colors } from '../theme';
 
 interface Props {
   settings: Settings;
   onChange: (settings: Settings) => void;
+  /** Hakee lisäravinnetietokannan uusimman version heti. */
+  onUpdateDatabase: () => Promise<UpdateResult>;
 }
 
 const GROUPS = Object.keys(GROUP_LABELS) as FodmapGroup[];
 
-export function SettingsScreen({ settings, onChange }: Props) {
+const UPDATE_MESSAGE: Record<UpdateResult, string> = {
+  updated: 'Tietokanta päivitetty.',
+  upToDate: 'Tietokanta on jo uusin.',
+  notDue: '',
+  failed: 'Päivitys epäonnistui. Tarkista verkkoyhteys.',
+};
+
+const formatDate = (iso: string | null) => (iso ? iso.split('-').reverse().map(Number).join('.') : 'tuntematon');
+
+export function SettingsScreen({ settings, onChange, onUpdateDatabase }: Props) {
+  const [updating, setUpdating] = useState(false);
+  const [updateMessage, setUpdateMessage] = useState('');
+  const db = supplementDbInfo();
   const toggle = (group: FodmapGroup, tolerated: boolean) => {
     const next = new Set(settings.tolerated);
     if (tolerated) next.add(group);
@@ -50,6 +67,23 @@ export function SettingsScreen({ settings, onChange }: Props) {
       })}
 
       <Button label="Tyhjennä historia" variant="secondary" onPress={confirmClear} />
+
+      <Text style={styles.title}>Lisäravinnetietokanta</Text>
+      <Text style={styles.body}>
+        {db.size} tuotetta suomalaisista terveyskaupoista, apteekeista ja urheiluravinnekaupoista, päivitetty {formatDate(db.updated)}.
+        Sovellus hakee uuden version kerran viikossa.
+      </Text>
+      <Button
+        label={updating ? 'Haetaan…' : 'Tarkista päivitys nyt'}
+        variant="secondary"
+        disabled={updating}
+        onPress={async () => {
+          setUpdating(true);
+          setUpdateMessage(UPDATE_MESSAGE[await onUpdateDatabase()]);
+          setUpdating(false);
+        }}
+      />
+      {updateMessage ? <Text style={styles.body}>{updateMessage}</Text> : null}
 
       <Text style={styles.title}>Tietoa</Text>
       <Text style={styles.body}>

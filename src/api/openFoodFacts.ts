@@ -22,7 +22,7 @@ export interface Product {
   /** Käyttäjä on vahvistanut pakkauksesta, että tuote on laktoositon. */
   lactoseFree?: boolean;
   /** Mistä ainesosaluettelo on: Open Food Facts, verkkokauppa vai käyttäjän kirjoittama/kuvaama. */
-  source: 'off' | StoreId | 'manual' | 'web';
+  source: 'off' | StoreId | 'manual' | 'web' | 'supplementDb';
   fetchedAt: number;
 }
 

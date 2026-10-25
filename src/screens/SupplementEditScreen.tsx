@@ -1,11 +1,13 @@
 import { useState } from 'react';
 import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 
+import { analyzeIngredients } from '../analysis/analyze';
 import { Button } from '../components/Button';
+import { FodmapGroup } from '../data/ingredients';
 import { photographText } from '../ocr';
 import { assessStack, dailyAmount, Supplement } from '../supplements/assess';
 import { formatAmount, NUTRIENT_BY_ID, NutrientAmounts, NutrientId, NUTRIENTS, parseSupplementText } from '../supplements/nutrients';
-import { colors } from '../theme';
+import { colors, SEVERITY_COLOR, VERDICT_STYLE } from '../theme';
 import { LEVEL_STYLE } from './SupplementsScreen';
 
 interface Props {
@@ -17,6 +19,8 @@ interface Props {
   needsLabel?: boolean;
   /** Mistä tiedot tulivat tai miksi niitä ei löytynyt. */
   lookupInfo?: string;
+  /** Käyttäjän sietämät FODMAP-ryhmät (asetukset). */
+  tolerated?: FodmapGroup[];
   onSave: (s: Supplement) => void;
   onDelete?: () => void;
   onCancel: () => void;
@@ -28,7 +32,7 @@ const toNumber = (t: string) => {
   return Number.isFinite(n) ? n : undefined;
 };
 
-export function SupplementEditScreen({ draft, others, isNew, needsLabel, lookupInfo, onSave, onDelete, onCancel }: Props) {
+export function SupplementEditScreen({ draft, others, isNew, needsLabel, lookupInfo, tolerated, onSave, onDelete, onCancel }: Props) {
   const [name, setName] = useState(draft.name);
   const [doseUnits, setDoseUnits] = useState(toText(draft.doseUnits));
   const [unitsPerDay, setUnitsPerDay] = useState(toText(draft.unitsPerDay));
@@ -156,6 +160,8 @@ export function SupplementEditScreen({ draft, others, isNew, needsLabel, lookupI
         )}
       </View>
 
+      {draft.ingredientsText ? <FodmapSection ingredients={draft.ingredientsText} tolerated={tolerated} /> : null}
+
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>{isNew ? 'Jos lisäät tämän pinoosi' : 'Tämän vaikutus pinoosi'}</Text>
         {shown.map((def) => (
@@ -193,6 +199,33 @@ export function SupplementEditScreen({ draft, others, isNew, needsLabel, lookupI
   );
 }
 
+/** Ainesosien FODMAP-arvio: lisäravinteissa on usein polyoleja (sorbitoli, ksylitoli) tai inuliinia. */
+function FodmapSection({ ingredients, tolerated }: { ingredients: string; tolerated?: FodmapGroup[] }) {
+  const [open, setOpen] = useState(false);
+  const analysis = analyzeIngredients(ingredients, { tolerated });
+  const verdict = VERDICT_STYLE[analysis.verdict];
+  return (
+    <View style={[styles.section, { backgroundColor: verdict.bg }]}>
+      <Text style={styles.sectionTitle}>Vatsa ja FODMAP</Text>
+      <Text style={[styles.verdict, { color: verdict.color }]}>
+        {verdict.icon} {verdict.title}
+      </Text>
+      {analysis.findings
+        .filter((f) => f.severity !== 'ok')
+        .map((f) => (
+          <Text key={f.entry.id} style={styles.small}>
+            <Text style={{ color: SEVERITY_COLOR[f.severity], fontWeight: '700' }}>● </Text>
+            {f.entry.name}: {f.reason}
+          </Text>
+        ))}
+      <Pressable onPress={() => setOpen((o) => !o)}>
+        <Text style={styles.link}>{open ? 'Piilota ainesosat' : 'Näytä ainesosat'}</Text>
+      </Pressable>
+      {open && <Text style={styles.small}>{ingredients}</Text>}
+    </View>
+  );
+}
+
 function Field({ label, value, onChange }: { label: string; value: string; onChange: (t: string) => void }) {
   return (
     <View style={{ flex: 1, gap: 4 }}>
@@ -223,5 +256,6 @@ const styles = StyleSheet.create({
   warningIcon: { fontSize: 16, fontWeight: '800', width: 16, textAlign: 'center' },
   warningText: { flex: 1, fontSize: 14, color: colors.text },
   ok: { fontSize: 14, color: colors.green, fontWeight: '600' },
+  verdict: { fontSize: 15, fontWeight: '700' },
   small: { fontSize: 13, color: colors.muted },
 });

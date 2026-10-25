@@ -28,6 +28,7 @@ import { SupplementsScreen } from './src/screens/SupplementsScreen';
 import { scanBarcodeOnce } from './src/scanner';
 import { Supplement } from './src/supplements/assess';
 import { DbMatch, findSupplement } from './src/supplements/database';
+import { loadSavedDatabase, updateDatabase } from './src/supplements/dbUpdate';
 import { isSupplementLabel, parseSupplementText } from './src/supplements/nutrients';
 import { StoreBrowserScreen } from './src/screens/StoreBrowserScreen';
 import {
@@ -117,11 +118,25 @@ function Main() {
   const [settings, setSettings] = useState<Settings>({ tolerated: [] });
   const [overrides, setOverrides] = useState<Record<string, Override>>({});
 
+  // Lisäravinnetietokannan versio: kasvaa, kun uudempi tietokanta otetaan käyttöön (näkymät päivittyvät).
+  const [, setDbVersion] = useState(0);
+
   useEffect(() => {
     getSettings().then(setSettings);
     getOverrides().then(setOverrides);
     getSupplements().then(setSupplements);
+    // Aiemmin ladattu tietokanta heti, sitten viikoittainen tarkistus verkosta.
+    loadSavedDatabase()
+      .then((loaded) => loaded && setDbVersion((v) => v + 1))
+      .then(() => updateDatabase())
+      .then((result) => result === 'updated' && setDbVersion((v) => v + 1));
   }, []);
+
+  const updateDatabaseNow = async () => {
+    const result = await updateDatabase(true);
+    if (result === 'updated') setDbVersion((v) => v + 1);
+    return result;
+  };
 
   // Androidin "Jaa"-valikosta tuleva sivu tai kuva. Käsittelijä vaihtuu tilan mukana, joten käytetään viittausta.
   const shareHandler = useRef<(share: Share) => void>(() => {});
@@ -178,8 +193,25 @@ function Main() {
         await showProduct(product, 'scan', result.offline);
         setBusy(false);
       } else {
-        // Ainesosat puuttuvat Open Food Factsista – kokeillaan kauppoja (busy jatkuu).
         const partial = 'notFound' in result ? undefined : result.product;
+        // Lisäravinteen ainesosat sovelluksen omasta tietokannasta: nopea ja toimii ilman verkkoa.
+        const known = findSupplement(barcode);
+        if (known?.ingredients) {
+          const product: Product = {
+            ...partial,
+            barcode,
+            name: partial?.name ?? known.name,
+            brand: partial?.brand ?? known.brand,
+            ingredientsText: known.ingredients,
+            source: 'supplementDb',
+            fetchedAt: Date.now(),
+          };
+          await saveProduct(product);
+          await showProduct(product, 'scan');
+          setBusy(false);
+          return;
+        }
+        // Ainesosat puuttuvat Open Food Factsista – kokeillaan kauppoja (busy jatkuu).
         const direct = await directLookup(barcode, (p) => !!p.ingredients);
         if (direct.product) {
           await showProduct(await saveStoreProduct(barcode, direct.product, partial), 'scan');
@@ -340,6 +372,18 @@ function Main() {
       if (!('notFound' in result)) partial = result.product;
     } catch {
       // Verkkokaupat yritetään silti.
+    }
+    // Tietokannassa on tuote ilman vitamiinitaulukkoa: nimi ja ainesosat (FODMAP) sieltä, taulukkoa haetaan kaupoista.
+    if (known) {
+      partial = {
+        barcode,
+        source: 'supplementDb',
+        fetchedAt: Date.now(),
+        ...partial,
+        name: partial?.name ?? known.name,
+        brand: partial?.brand ?? known.brand,
+        ingredientsText: partial?.ingredientsText ?? known.ingredients,
+      };
     }
     const labelOf = (p: StoreProduct) => parseSupplementText(`${p.nutritionText ?? ''}\n${p.pageText ?? ''}`);
     const direct = await directLookup(barcode, (p) => Object.keys(labelOf(p).amounts).length > 0);
@@ -560,6 +604,7 @@ function Main() {
         isNew={overlay.isNew}
         needsLabel={overlay.needsLabel}
         lookupInfo={overlay.lookupInfo}
+        tolerated={settings.tolerated}
         onSave={saveSupplement}
         onDelete={overlay.isNew ? undefined : () => deleteSupplement(draft.id)}
         onCancel={closeOverlay}
@@ -583,7 +628,7 @@ function Main() {
   } else if (tab === 'check') {
     content = <IngredientsScreen onSubmit={(_, text) => setOverlay({ kind: 'result', text, back: 'check' })} />;
   } else {
-    content = <SettingsScreen settings={settings} onChange={changeSettings} />;
+    content = <SettingsScreen settings={settings} onChange={changeSettings} onUpdateDatabase={updateDatabaseNow} />;
   }
 
   const keyboardOpen = keyboardHeight > 0;
