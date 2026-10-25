@@ -45,6 +45,12 @@ describe('parseSupplementText', () => {
     expect(parseSupplementText(text)).toEqual({ amounts: { vitD: 20, b9: 400 }, doseUnits: 1 });
   });
 
+  it('does not read vitamin letters from the next word', () => {
+    expect(parseSupplementText('D-vitamiini Arki 360° 50 µg 150 kpl').amounts).toEqual({ vitD: 50 });
+    expect(parseSupplementText('D-vitamiini edistää luustoa, 25 µg').amounts).toEqual({ vitD: 25 });
+    expect(parseSupplementText('Vitamin K2 (menakinoni-7) 100 µg, vitamiini C 80 mg').amounts).toEqual({ vitK: 100, vitC: 80 });
+  });
+
   it('skips pack sizes that follow a nutrient name', () => {
     expect(parseSupplementText('Feel Vivid Magnesiumglysinaatti 200 g\nMagnesium | 150 mg').amounts).toEqual({ magnesium: 150 });
     expect(parseSupplementText('Magnesium Carbonate, 55 g pala').amounts).toEqual({});

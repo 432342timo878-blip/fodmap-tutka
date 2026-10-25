@@ -28,13 +28,15 @@ export interface NutrientDef {
 }
 
 const B = '(^|[^a-zåäö0-9])';
+/** "vitamiini A" / "vitamin D3", mutta ei "D-vitamiini Arki", "vitamiini edistää" tai "vitamin and". */
+const named = (letter: string) => `${B}vitamiini ${letter}(?![a-zåäö])|${B}vitamin ${letter}(?![a-zåäö])|${B}${letter}[0-9]?-vitamin`;
 
 export const NUTRIENTS: NutrientDef[] = [
-  { id: 'vitD', name: 'D-vitamiini', unit: 'µg', ri: 10, ul: 100, perIU: 0.025, label: new RegExp(`${B}d3?-?vitamiini|vitamiini d|kolekalsiferoli|ergokalsiferoli|vitamin d|d-vitamin`) },
-  { id: 'vitA', name: 'A-vitamiini', unit: 'µg', ri: 800, ul: 3000, perIU: 0.3, note: 'Yläraja koskee retinolia (ei beetakaroteenia).', label: new RegExp(`${B}a-vitamiini|vitamiini a|retinoli|vitamin a|a-vitamin`) },
-  { id: 'vitE', name: 'E-vitamiini', unit: 'mg', ri: 12, ul: 300, perIU: 0.67, label: new RegExp(`${B}e-vitamiini|vitamiini e|tokoferoli|vitamin e|e-vitamin`) },
-  { id: 'vitK', name: 'K-vitamiini', unit: 'µg', ri: 75, note: 'Kerro K-vitamiinista lääkärille, jos käytät verenohennuslääkettä.', label: new RegExp(`${B}k[12]?-?vitamiini|vitamiini k|menakinoni|fyllokinoni|vitamin k|k-vitamin`) },
-  { id: 'vitC', name: 'C-vitamiini', unit: 'mg', ri: 80, label: new RegExp(`${B}c-vitamiini|vitamiini c|askorbiini|vitamin c|c-vitamin`) },
+  { id: 'vitD', name: 'D-vitamiini', unit: 'µg', ri: 10, ul: 100, perIU: 0.025, label: new RegExp(`${B}d3?-?vitamiini|kolekalsiferoli|ergokalsiferoli|${named('d')}`) },
+  { id: 'vitA', name: 'A-vitamiini', unit: 'µg', ri: 800, ul: 3000, perIU: 0.3, note: 'Yläraja koskee retinolia (ei beetakaroteenia).', label: new RegExp(`${B}a-vitamiini|retinoli|${named('a')}`) },
+  { id: 'vitE', name: 'E-vitamiini', unit: 'mg', ri: 12, ul: 300, perIU: 0.67, label: new RegExp(`${B}e-vitamiini|tokoferoli|${named('e')}`) },
+  { id: 'vitK', name: 'K-vitamiini', unit: 'µg', ri: 75, note: 'Kerro K-vitamiinista lääkärille, jos käytät verenohennuslääkettä.', label: new RegExp(`${B}k[12]?-?vitamiini|menakinoni|fyllokinoni|${named('k')}`) },
+  { id: 'vitC', name: 'C-vitamiini', unit: 'mg', ri: 80, label: new RegExp(`${B}c-vitamiini|askorbiini|${named('c')}`) },
   { id: 'b1', name: 'Tiamiini (B1)', unit: 'mg', ri: 1.1, label: /tiamiini|thiamin|b1(?!\d)/ },
   { id: 'b2', name: 'Riboflaviini (B2)', unit: 'mg', ri: 1.4, label: /riboflaviini|riboflavin|b2(?!\d)/ },
   { id: 'b3', name: 'Niasiini (B3)', unit: 'mg', ri: 16, ul: 900, note: 'Yläraja koskee nikotiiniamidia; nikotiinihapolle se on 10 mg.', label: /niasiini|niacin|nikotiiniamidi|nicotinamide|b3(?!\d)/ },

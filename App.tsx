@@ -127,7 +127,11 @@ function Main() {
   const shareHandler = useRef<(share: Share) => void>(() => {});
   useEffect(() => subscribeToShares((share) => shareHandler.current(share)), []);
 
+  // Kesken oleva jaetun kuvan luku: peruutus kasvattaa laskuria, jolloin valmistuva tulos jätetään näyttämättä.
+  const readingToken = useRef(0);
+
   const closeOverlay = () => {
+    readingToken.current++;
     // Alinäkymistä palataan edelliseen näkymään, muista välilehdelle.
     if (overlay?.kind === 'heartGroup') return setOverlay({ kind: 'result', product: overlay.product, back: overlay.back });
     if (overlay?.kind === 'stores') return setOverlay({ kind: 'ingredients', barcode: overlay.barcode, back: overlay.back });
@@ -423,10 +427,13 @@ function Main() {
       return;
     }
     setOverlay({ kind: 'reading', back: tab });
+    const token = ++readingToken.current;
     try {
       const lines = await recognizeTextAsync(share.uri);
+      if (token !== readingToken.current) return;
       showSharedText(lines.join('\n'), '');
     } catch (e) {
+      if (token !== readingToken.current) return;
       setOverlay(null);
       Alert.alert('Kuvaa ei voitu lukea', e instanceof Error ? e.message : String(e));
     }
