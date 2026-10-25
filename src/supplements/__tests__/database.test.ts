@@ -6,17 +6,18 @@ const product = (ean: string, name: string, labelText: string, ingredients?: str
 
 describe('supplement database', () => {
   it('takes a downloaded database into use only when it is newer', () => {
-    const v1 = { updated: '2026-10-25', products: [product('6400000000001', 'Magnesium 100', 'Magnesium 100 mg')] };
+    // Päiväykset kaukana tulevaisuudessa: sovelluksen mukana tuleva tietokanta (CI:ssä oikea, tänään koottu) on aina vanhempi.
+    const v1 = { updated: '2999-01-01', products: [product('6400000000001', 'Magnesium 100', 'Magnesium 100 mg')] };
     expect(isSupplementDb(v1)).toBe(true);
     expect(adoptDatabaseIfNewer(v1)).toBe(true);
-    expect(supplementDbInfo()).toEqual({ updated: '2026-10-25', size: 1 });
+    expect(supplementDbInfo()).toEqual({ updated: '2999-01-01', size: 1 });
     expect(findSupplement('6400000000001')?.label.amounts).toEqual({ magnesium: 100 });
 
     // Sama tai vanhempi päiväys ei korvaa nykyistä.
-    expect(adoptDatabaseIfNewer({ updated: '2026-10-18', products: [product('6400000000002', 'Vanha', '')] })).toBe(false);
+    expect(adoptDatabaseIfNewer({ updated: '2998-12-01', products: [product('6400000000002', 'Vanha', '')] })).toBe(false);
     expect(findSupplement('6400000000002')).toBeUndefined();
 
-    const v2 = { updated: '2026-11-01', products: [product('6400000000003', 'Magnesia purutabletti', '', 'magnesiumoksidi, sorbitoli, fruktoosi')] };
+    const v2 = { updated: '2999-02-01', products: [product('6400000000003', 'Magnesia purutabletti', '', 'magnesiumoksidi, sorbitoli, fruktoosi')] };
     expect(adoptDatabaseIfNewer(v2)).toBe(true);
     expect(findSupplement('6400000000001')).toBeUndefined();
     // Tuote ilman vitamiinitaulukkoa: ainesosat FODMAP-arvioon, ei määriä.
