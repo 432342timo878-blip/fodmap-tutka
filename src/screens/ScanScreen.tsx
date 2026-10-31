@@ -2,6 +2,7 @@ import { BarcodeScanningResult, CameraView, useCameraPermissions } from 'expo-ca
 import { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
+import { isValidBarcode } from '../barcode';
 import { Button } from '../components/Button';
 import { BARCODE_TYPES } from '../scanner';
 import { colors } from '../theme';
@@ -24,17 +25,30 @@ export function ScanScreen({ busy, onBarcode, launchRequest }: Props) {
   const [manual, setManual] = useState('');
   const onBarcodeRef = useRef(onBarcode);
   onBarcodeRef.current = onBarcode;
+  // Peräkkäiset väärät luvut: lukija avataan uudelleen enintään kaksi kertaa.
+  const misreads = useRef(0);
 
   useEffect(() => {
     const sub = CameraView.onModernBarcodeScanned(({ data }) => {
       const code = data?.trim();
-      if (code) onBarcodeRef.current(code);
+      if (!code) return;
+      if (isValidBarcode(code)) {
+        misreads.current = 0;
+        setError(null);
+        onBarcodeRef.current(code);
+      } else if (misreads.current++ < 2) {
+        // Tarkistenumero ei täsmää: koodi luettiin väärin, luetaan uudelleen.
+        setError(`Viivakoodi luettiin väärin (${code}). Pidä kamera hetken paikallaan.`);
+        launchRef.current();
+      } else {
+        misreads.current = 0;
+        setError(`Viivakoodi luettiin väärin (${code}). Kirjoita numerot itse tai käytä sovelluksen omaa kameraa.`);
+      }
     });
     return () => sub.remove();
   }, []);
 
   const launchGoogleScanner = async () => {
-    setError(null);
     try {
       await CameraView.launchScanner({ barcodeTypes: BARCODE_TYPES });
     } catch (e) {
@@ -45,6 +59,8 @@ export function ScanScreen({ busy, onBarcode, launchRequest }: Props) {
       setMode('camera');
     }
   };
+  const launchRef = useRef(launchGoogleScanner);
+  launchRef.current = launchGoogleScanner;
 
   useEffect(() => {
     if (launchRequest > 0 && mode === 'google') launchGoogleScanner();
@@ -53,10 +69,14 @@ export function ScanScreen({ busy, onBarcode, launchRequest }: Props) {
 
   const submitManual = () => {
     const code = manual.replace(/\D/g, '');
-    if (code.length >= 8) {
-      setManual('');
-      onBarcode(code);
+    if (code.length < 8) return;
+    if (!isValidBarcode(code)) {
+      setError(`Numerosarja ${code} ei ole kelvollinen viivakoodi. Tarkista numerot.`);
+      return;
     }
+    setError(null);
+    setManual('');
+    onBarcode(code);
   };
 
   const manualRow = (
@@ -89,7 +109,10 @@ export function ScanScreen({ busy, onBarcode, launchRequest }: Props) {
     <View style={styles.container}>
       <Pressable
         style={({ pressed }) => [styles.bigButton, (pressed || busy) && { opacity: 0.7 }]}
-        onPress={launchGoogleScanner}
+        onPress={() => {
+          setError(null);
+          launchGoogleScanner();
+        }}
         disabled={busy}
       >
         {busy ? (
@@ -115,17 +138,25 @@ export function ScanScreen({ busy, onBarcode, launchRequest }: Props) {
 
 /** Sama viivakoodi luetaan kameralla monta kertaa sekunnissa – ohitetaan toistot hetken ajan. */
 const REPEAT_IGNORE_MS = 3000;
+/** Koodi hyväksytään vasta, kun kaksi peräkkäistä lukua antaa saman tuloksen tämän ajan sisällä. */
+const CONFIRM_WITHIN_MS = 1500;
 
 function InAppCamera({ busy, onBarcode }: { busy: boolean; onBarcode: (barcode: string) => void }) {
   const [permission, requestPermission] = useCameraPermissions();
   const [torch, setTorch] = useState(false);
   const last = useRef<{ code: string; at: number } | null>(null);
+  const candidate = useRef<{ code: string; at: number } | null>(null);
 
   const handleScan = ({ data }: BarcodeScanningResult) => {
     const code = data.trim();
     const now = Date.now();
-    if (busy || !code) return;
+    if (busy || !code || !isValidBarcode(code)) return;
     if (last.current && last.current.code === code && now - last.current.at < REPEAT_IGNORE_MS) return;
+    // Yksittäinen luku voi olla väärä: odotetaan, että seuraava luku on sama.
+    const previous = candidate.current;
+    candidate.current = { code, at: now };
+    if (!previous || previous.code !== code || now - previous.at > CONFIRM_WITHIN_MS) return;
+    candidate.current = null;
     last.current = { code, at: now };
     onBarcode(code);
   };

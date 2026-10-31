@@ -14,11 +14,13 @@ interface Props {
   /** Avaa verkkokauppahaun sovelluksen sisällä. */
   onSearchStores?: (query: string) => void;
   onCancel?: () => void;
+  /** Avaa viivakoodinlukijan uudelleen (koodi voi olla luettu väärin). */
+  onRescan?: () => void;
   /** Miksi tuotetta ei löytynyt (kauppakohtaiset syyt). */
   lookupInfo?: string;
 }
 
-export function IngredientsScreen({ barcode, initialName = '', initialText = '', onSubmit, onSearchStores, onCancel, lookupInfo }: Props) {
+export function IngredientsScreen({ barcode, initialName = '', initialText = '', onSubmit, onSearchStores, onCancel, onRescan, lookupInfo }: Props) {
   const [name, setName] = useState(initialName);
   const [text, setText] = useState(initialText);
   const [recognizing, setRecognizing] = useState(false);
@@ -50,6 +52,12 @@ export function IngredientsScreen({ barcode, initialName = '', initialText = '',
       </Text>
 
       {lookupInfo && <Text style={styles.small}>{lookupInfo}</Text>}
+      {onRescan && (
+        <>
+          <Text style={styles.small}>Onko numero sama kuin pakkauksen viivakoodin alla? Jos ei, koodi luettiin väärin.</Text>
+          <Button label="Skannaa uudelleen" variant="secondary" onPress={onRescan} />
+        </>
+      )}
 
       <Button label={recognizing ? 'Tunnistetaan tekstiä…' : '📷 Kuvaa ainesosaluettelo'} onPress={photograph} disabled={recognizing} />
       {recognizing && <ActivityIndicator />}

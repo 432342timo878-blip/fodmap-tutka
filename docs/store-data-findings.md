@@ -20,6 +20,11 @@ Tested 23.10.2026 from a home connection in Finland (6/6 test products). Servers
 - No store ID needed; the variable type must be `ID!`. Unknown EAN → error "Product not found", `product: null`.
 - Values are Finnish strings ("3,2 g", "1 004 kJ / 238 kcal"). Several nutrient groups are possible: `referenceQuantity` "100 g", or "1 kpl" for supplements (then `recommendedIntake` is % of the daily value).
 - Also returns Sokos-only products (same S-Group product id "sokId").
+- In-store bakery ("paistopiste") and weighed products have shop-internal EAN-13 codes starting with 2: the store sticker
+  holds the item number and the price/weight (Coop voicroissant: sticker `2001302801232`), but S-kaupat lists the item with
+  zeros in the price part (`2001302800006`, check digit recalculated). The sticker code → "Product not found"; the catalogue
+  code returns name and ingredients (checked 31.10.2026: Coop voicroissant, Kotimaista korvapuusti). The app converts
+  2-codes before the lookup (`src/barcode.ts` `catalogueCode`). Other chains' internal codes are not in any open source.
 - Website: search `/hakutulokset?queryString=<EAN>` (`/hakutulos` is a 404), product page `/tuote/<slug>/<EAN>`. Product data is not in the HTML; the page loads it from the API.
 
 ## K-Ruoka: API from inside a k-ruoka.fi page (implemented: `src/api/kRuokaLookup.tsx`)

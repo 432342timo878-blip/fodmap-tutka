@@ -94,6 +94,19 @@ export function ResultView({
         </View>
       )}
 
+      {analysis.otherTriggers.length > 0 && (
+        <View style={[styles.section, { backgroundColor: colors.yellowBg }]}>
+          <Text style={styles.sectionTitle}>Muut mahdolliset vatsan ärsyttäjät</Text>
+          <Text style={styles.small}>Eivät ole FODMAPeja eivätkä vaikuta arvioon, mutta voivat pahentaa IBS-oireita.</Text>
+          {analysis.otherTriggers.map((f) => (
+            <Text key={f.entry.id} style={styles.muted}>
+              <Text style={{ fontWeight: '700', color: colors.text }}>{f.entry.name}: </Text>
+              {f.entry.trigger}
+            </Text>
+          ))}
+        </View>
+      )}
+
       {lactoseFlagged && onMarkLactoseFree && (
         <Button label="Pakkauksessa lukee: laktoositon" variant="secondary" onPress={onMarkLactoseFree} />
       )}

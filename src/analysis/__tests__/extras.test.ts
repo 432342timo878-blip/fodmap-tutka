@@ -4,6 +4,22 @@ import { analyzeIngredients } from '../analyze';
 import { createHeartSymbolMatcher, nameTokens } from '../heartSymbol';
 import { ingredientsFromOcrLines } from '../ocrText';
 
+describe('other IBS triggers (not FODMAPs)', () => {
+  it('lists caffeine, carbonation and emulsifiers separately without changing the verdict', () => {
+    const energyDrink = 'vesi, sokeri, hiilidioksidi, happamuudensäätöaine (sitruunahappo), kofeiini, aromit, väri (E150d)';
+    const r = analyzeIngredients(energyDrink);
+    expect(r.verdict).toBe('green');
+    expect(r.otherTriggers.map((f) => f.entry.id)).toEqual(['hiilihappo', 'kofeiini']);
+    const cream = analyzeIngredients('kerma, stabilointiaine (karrageeni)', { productName: 'laktoositon kerma' });
+    expect(cream.otherTriggers.map((f) => f.entry.id)).toEqual(['emulgointiaineet-ibs']);
+    expect(analyzeIngredients('tomaatti, chili, suola').otherTriggers.map((f) => f.entry.id)).toEqual(['tulinen']);
+  });
+
+  it('flags hydrogenated starch hydrolysate as a polyol', () => {
+    expect(analyzeIngredients('makeutusaine (hydrogenoitu tärkkelyshydrolysaatti), kaakaovoi').verdict).toBe('red');
+  });
+});
+
 describe('lactose-free detection', () => {
   const yoghurt = 'maito, kerma, mansikka 10 %, sokeri, maitohappobakteerit';
 

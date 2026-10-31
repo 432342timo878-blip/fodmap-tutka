@@ -218,6 +218,12 @@ function FodmapSection({ ingredients, tolerated }: { ingredients: string; tolera
             {f.entry.name}: {f.reason}
           </Text>
         ))}
+      {analysis.otherTriggers.map((f) => (
+        <Text key={f.entry.id} style={styles.small}>
+          <Text style={{ color: colors.yellow, fontWeight: '700' }}>● </Text>
+          {f.entry.name} (ei FODMAP): {f.entry.trigger}
+        </Text>
+      ))}
       <Pressable onPress={() => setOpen((o) => !o)}>
         <Text style={styles.link}>{open ? 'Piilota ainesosat' : 'Näytä ainesosat'}</Text>
       </Pressable>

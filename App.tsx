@@ -4,6 +4,7 @@ import { ActivityIndicator, Alert, BackHandler, Pressable, StyleSheet, Text, Vie
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { analyzeIngredients } from './src/analysis/analyze';
+import { catalogueCode, isInStoreCode } from './src/barcode';
 import { assessHeartSymbol, classifyHeartGroup, HEART_GROUP_BY_ID } from './src/analysis/heartCriteria';
 import { createHeartSymbolMatcher } from './src/analysis/heartSymbol';
 import { hasNutrition, parseNutritionText } from './src/analysis/nutrition';
@@ -175,7 +176,9 @@ function Main() {
     setOverlay({ kind: 'result', product, offline, back });
   };
 
-  const handleBarcode = async (barcode: string) => {
+  const handleBarcode = async (scanned: string) => {
+    // Paistopisteen tarrassa on hinta tai paino: haetaan kaupan tuotenumerolla (S-kaupat listaa sen nollahinnalla).
+    const barcode = catalogueCode(scanned);
     setBusy(true);
     try {
       const result = await lookupProduct(barcode);
@@ -284,10 +287,13 @@ function Main() {
       } else if (lookup.partial) {
         await showProduct(lookup.partial, 'scan', lookup.offline);
       } else {
+        const reasons = message.type === 'notFound' ? `Open Food Facts: ei ainesosia · ${lookup.directInfo} · K-Ruoka: ${message.reason}` : '';
         setOverlay({
           kind: 'ingredients',
           barcode: lookup.barcode,
-          lookupInfo: message.type === 'notFound' ? `Open Food Facts: ei ainesosia · ${lookup.directInfo} · K-Ruoka: ${message.reason}` : undefined,
+          lookupInfo: isInStoreCode(lookup.barcode)
+            ? `Kaupan oma koodi (paistopiste tai punnittava tuote). Tällaisia tuotteita löytyy S-kauppojen valikoimasta; muiden kauppojen omia koodeja ei voi hakea. ${reasons}`
+            : reasons || undefined,
           back: 'scan',
         });
       }
@@ -556,6 +562,14 @@ function Main() {
         lookupInfo={overlay.lookupInfo}
         onSubmit={(name, text) => submitIngredients(overlay.barcode, name, text, overlay.back)}
         onSearchStores={() => setOverlay({ kind: 'stores', barcode: overlay.barcode, back: overlay.back })}
+        onRescan={
+          overlay.back === 'scan'
+            ? () => {
+                closeOverlay();
+                setLaunchRequest((n) => n + 1);
+              }
+            : undefined
+        }
         onCancel={closeOverlay}
       />
     );

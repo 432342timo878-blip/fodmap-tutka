@@ -22,6 +22,8 @@ export interface Analysis {
   findings: Finding[];
   /** Tunnistetut vähä-FODMAP-ainesosat. */
   safe: Finding[];
+  /** Muut kuin FODMAP-syistä vatsaa mahdollisesti ärsyttävät (kofeiini, hiilihappo, tulinen…); eivät vaikuta arvioon. */
+  otherTriggers: Finding[];
   unrecognized: string[];
   ingredientCount: number;
   lactoseFree: boolean;
@@ -254,6 +256,7 @@ export function analyzeIngredients(ingredientText: string | undefined | null, op
     verdict,
     findings,
     safe,
+    otherTriggers: deduped.filter((f) => f.entry.trigger).sort((a, b) => a.index - b.index),
     unrecognized: unique(unrecognized),
     ingredientCount: segments.length,
     lactoseFree,

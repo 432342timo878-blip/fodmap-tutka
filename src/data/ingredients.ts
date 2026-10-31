@@ -33,6 +33,11 @@ export interface IngredientEntry {
   /** Ohita sulkeissa luetellut ala-ainesosat (esim. "glukoosisiirappi (vehnä)"). */
   absorbsChildren?: boolean;
   note?: string;
+  /**
+   * Muu kuin FODMAP-syy, miksi aine voi pahentaa IBS-oireita (kofeiini, hiilihappo, tulinen, alkoholi,
+   * eräät emulgointiaineet). Ei vaikuta FODMAP-arvioon; näytetään erikseen.
+   */
+  trigger?: string;
 }
 
 export const GROUP_LABELS: Record<FodmapGroup, string> = {
@@ -337,6 +342,9 @@ export const INGREDIENTS: IngredientEntry[] = [
   e('erytritoli', 'Erytritoli (E968)', 'low', [], ['erytritoli', 'erythritol', 'e968'],
     { note: 'Erytritoli ei ole FODMAP, mutta suuret määrät voivat aiheuttaa oireita joillekin.' }),
   e('polydekstroosi', 'Polydekstroosi (E1200)', 'moderate', ['polyolit'], ['polydekstroosi', 'polydextrose', 'e1200']),
+  e('htv', 'Hydrogenoitu tärkkelyshydrolysaatti', 'high', ['polyolit'],
+    ['hydrogenoitu tärkkelyshydrolysaatti', 'hydrogenated starch hydrolysate', 'polyglysitoli', 'polyglycitol', 'hydrogenerad stärkelsehydrolysat'],
+    { potent: true, note: 'Maltitolin kaltainen polyoli (E965 ii), jota käytetään sokerittomissa makeisissa.' }),
   e('makeutusaineet-low', 'Keinotekoiset makeutusaineet', 'low', [],
     ['stevia', 'steviolglykosid', 'sukraloosi', 'aspartaami', 'asesulfaami', 'sakariini', 'sucralose', 'aspartame', 'acesulfame', 'e950', 'e951', 'e954', 'e955', 'e960']),
 
@@ -352,7 +360,25 @@ export const INGREDIENTS: IngredientEntry[] = [
     { note: 'Määrittelemätön kuitu voi olla inuliinia tai sikurikuitua. Tarkista tuotteen pakkaus.' }),
   e('omenakuitu', 'Omenakuitu', 'moderate', ['fruktoosi', 'polyolit'], ['omenakuitu', 'apple fibre', 'apple fiber', 'äppelfiber']),
   e('kuidut-low', 'Kuidut (vähä-FODMAP)', 'low', [],
-    ['kaurakuitu', 'kauralese', 'betaglukaani', 'sitrus kuitu', 'sitruskuitu', 'bambukuitu', 'perunakuitu', 'oat fibre', 'oat fiber', 'beta-glucan', 'pektiini', 'pectin', 'pektin', 'guarkumi', 'ksantaanikumi', 'johanneksenleipäpuujauhe', 'karrageeni', 'agar', 'gelatiini', 'guar', 'xanthan', 'carrageenan', 'gelatin']),
+    ['kaurakuitu', 'kauralese', 'betaglukaani', 'sitrus kuitu', 'sitruskuitu', 'bambukuitu', 'perunakuitu', 'oat fibre', 'oat fiber', 'beta-glucan', 'pektiini', 'pectin', 'pektin', 'guarkumi', 'ksantaanikumi', 'johanneksenleipäpuujauhe', 'agar', 'gelatiini', 'guar', 'xanthan', 'gelatin']),
+
+  // ---------------------------------------------------------------- Muut IBS-ärsyttäjät (eivät FODMAPeja)
+  // Lähteet: NICE CG61 (IBS in adults, ruokavalio-ohjeet: tee/kahvi enintään 3 kuppia päivässä, alkoholia ja
+  // hiilihapotettuja juomia vähemmän), British Dietetic Association: IBS and diet -faktalehti (tulinen ruoka),
+  // emulgointiaineet: Chassaing ym. 2022 (Gastroenterology, CMC-ruokintatutkimus) – näyttö vielä alustavaa.
+  e('kofeiini', 'Kofeiini', 'low', [], ['kofeiini', 'caffeine', 'koffein', 'guarana'],
+    { trigger: 'Kofeiini voi kiihdyttää suolen toimintaa ja pahentaa ripulia. Suositus: enintään 3 kupillista teetä tai kahvia päivässä.' }),
+  e('kahvi', 'Kahvi', 'low', [], ['kahvi', 'coffee', 'kaffe', 'espresso'],
+    { trigger: 'Kahvi kiihdyttää suolen toimintaa (myös kofeiinittomana jonkin verran). Suositus: enintään 3 kupillista päivässä.' }),
+  e('hiilihappo', 'Hiilihappo', 'low', [], ['hiilidioksidi', 'hiilihappo', 'carbon dioxide', 'kolsyra', 'koldioxid'],
+    { trigger: 'Hiilihapotetut juomat voivat lisätä turvotusta ja ilmavaivoja.' }),
+  e('alkoholi', 'Alkoholi', 'low', [], ['alkoholi', 'etanoli', '=alcohol', '=alkohol', 'rommi', 'konjakki', 'likööri', 'viski', '=rum', 'brandy', 'whisky'],
+    { trigger: 'Alkoholi voi ärsyttää suolistoa ja pahentaa ripulia.' }),
+  e('tulinen', 'Tulinen mauste (chili)', 'low', [], ['chili', 'cayenne', 'jalapeño', 'jalapeno', 'habanero', 'tabasco', 'kapsaisiini', 'capsaicin', 'piri piri', 'sriracha'],
+    { trigger: 'Tulinen ruoka voi aiheuttaa vatsakipua ja kiihdyttää suolta herkillä.' }),
+  e('emulgointiaineet-ibs', 'Karrageeni / selluloosakumi / polysorbaatti', 'low', [],
+    ['karrageeni', 'carrageenan', 'karragenan', 'e407', 'karboksimetyyliselluloosa', 'selluloosakumi', 'carboxymethylcellulose', 'cellulose gum', 'e466', 'polysorbaatti', 'polysorbate', 'e433'],
+    { trigger: 'Alustavissa tutkimuksissa (lähinnä eläinkokeet ja pieni ihmistutkimus) nämä lisäaineet muuttivat suoliston mikrobistoa ja limakerrosta. Vaikutus IBS-oireisiin on vielä epävarma.' }),
 
   // ---------------------------------------------------------------- Mausteet, aromit, liemet
   e('aromi', 'Aromi', 'low', [],
@@ -368,16 +394,16 @@ export const INGREDIENTS: IngredientEntry[] = [
     ['kasvikset', 'vihannekset', 'kasvisuute', 'vihannesuute', 'hedelmät', 'vegetables', 'grönsaker'],
     { note: 'Kasviksia ei ole eritelty.' }),
   e('mausteet-low', 'Mausteet ja yrtit (vähä-FODMAP)', 'low', [],
-    ['pippuri', 'maustepippuri', 'kaneli', 'kurkuma', 'basilika', 'oregano', 'persilja', 'tilli', 'timjami', 'rosmariini', 'korianteri', 'kumina', 'chili', 'muskotti', 'neilikka', 'kardemumma', 'sinappi', 'piparjuuri', 'wasabi', 'sahrami', 'laakerinlehti', 'meirami', 'minttu', 'curry', 'vanilja', 'vanilliini', 'savuaromi', 'yrtit', 'maustekurkku', 'pepper', 'cinnamon', 'turmeric', 'basil', 'parsley', 'dill', 'thyme', 'rosemary', 'coriander', 'cumin', 'mustard', 'vanilla', 'peppar', 'kanel', 'senap', 'vanilj']),
-  e('kahvi-kaakao', 'Kahvi / kaakao / suklaa', 'low', [],
-    ['kahvi', 'kaakao', 'tumma suklaa', 'suklaa', 'coffee', 'cocoa', 'cacao', 'kakao', 'kaffe', 'dark chocolate', 'choklad']),
+    ['pippuri', 'maustepippuri', 'kaneli', 'kurkuma', 'basilika', 'oregano', 'persilja', 'tilli', 'timjami', 'rosmariini', 'korianteri', 'kumina', 'muskotti', 'neilikka', 'kardemumma', 'sinappi', 'piparjuuri', 'wasabi', 'sahrami', 'laakerinlehti', 'meirami', 'minttu', 'curry', 'vanilja', 'vanilliini', 'savuaromi', 'yrtit', 'maustekurkku', 'pepper', 'cinnamon', 'turmeric', 'basil', 'parsley', 'dill', 'thyme', 'rosemary', 'coriander', 'cumin', 'mustard', 'vanilla', 'peppar', 'kanel', 'senap', 'vanilj']),
+  e('kaakao', 'Kaakao / suklaa', 'low', [],
+    ['kaakao', 'tumma suklaa', 'suklaa', 'cocoa', 'cacao', 'kakao', 'dark chocolate', 'choklad']),
   e('kamomilla', 'Kamomilla', 'high', ['fruktaanit'], ['kamomilla', 'chamomile', 'kamomill']),
 
   // ---------------------------------------------------------------- Muut yleiset (vähä-FODMAP)
   e('perus', 'Perusaineet', 'low', [],
     ['vesi', 'suola', 'merisuola', 'öljy', 'rypsiöljy', 'oliiviöljy', 'auringonkukkaöljy', 'kasviöljy', 'kasvirasva', 'palmuöljy', 'kookosöljy', 'margariini', 'hiiva', 'leivinjauhe', 'nostatusaine', 'maissiöljy', 'etikka', 'viinietikka', 'mallasetikka', 'water', 'salt', '^oil', 'corn oil', 'yeast', 'vinegar', 'malt vinegar', 'vatten', 'olja', 'jäst', 'ättika', 'rasva', '=fat', 'fett']),
   e('lisaaineet', 'Lisäaineet', 'low', [],
-    ['emulgointiaine', 'emulgaattori', 'sakeuttamisaine', 'stabilointiaine', 'happamuudensäätöaine', 'säilöntäaine', 'väriaine', 'hapettumisenestoaine', 'paakkuuntumisenestoaine', 'kiilloteaine', 'kosteudensäilyttäjä', 'makeutusaine', 'makeutusaineet', 'jauhonparanne', 'arominvahvenne', 'hyytelöimisaine', 'sitruunahappo', 'askorbiinihappo', 'happo', 'natriumglutamaatti', 'hiivauute', 'mononatriumglutamaatti', 'vitamiini', 'riboflaviini', 'tiamiini', 'niasiini', 'foolihappo', 'kalsium', 'rauta', 'sinkki', 'jodi', 'fosfaatti', 'karbonaatti', 'sorbaatti', 'bentsoaatti', 'nitraatti', 'nitriitti', 'karoteeni', 'paprikauute', 'sulfiitti', 'antioksidantti', 'väri', 'karamelli', 'hiilidioksidi', 'kofeiini', 'kumi', 'vaha', 'hapate', 'hapatteet', 'juoksete', 'juoksute', 'juoksutin', 'savu', 'entsyymi', 'bakteeri', 'kulttuuri', 'rennet', 'culture', 'emulsifier', 'thickener', 'stabiliser', 'stabilizer', 'preservative', 'colour', 'color', 'antioxidant', 'acid', 'emulgeringsmedel', 'förtjockningsmedel', 'konserveringsmedel', 'färgämne', 'syra', 'vitamin']),
+    ['emulgointiaine', 'emulgaattori', 'sakeuttamisaine', 'stabilointiaine', 'happamuudensäätöaine', 'säilöntäaine', 'väriaine', 'hapettumisenestoaine', 'paakkuuntumisenestoaine', 'kiilloteaine', 'kosteudensäilyttäjä', 'makeutusaine', 'makeutusaineet', 'jauhonparanne', 'arominvahvenne', 'hyytelöimisaine', 'sitruunahappo', 'askorbiinihappo', 'happo', 'natriumglutamaatti', 'hiivauute', 'mononatriumglutamaatti', 'vitamiini', 'riboflaviini', 'tiamiini', 'niasiini', 'foolihappo', 'kalsium', 'rauta', 'sinkki', 'jodi', 'fosfaatti', 'karbonaatti', 'sorbaatti', 'bentsoaatti', 'nitraatti', 'nitriitti', 'karoteeni', 'paprikauute', 'sulfiitti', 'antioksidantti', 'väri', 'karamelli', 'kumi', 'vaha', 'hapate', 'hapatteet', 'juoksete', 'juoksute', 'juoksutin', 'savu', 'entsyymi', 'bakteeri', 'kulttuuri', 'rennet', 'culture', 'emulsifier', 'thickener', 'stabiliser', 'stabilizer', 'preservative', 'colour', 'color', 'antioxidant', 'acid', 'emulgeringsmedel', 'förtjockningsmedel', 'konserveringsmedel', 'färgämne', 'syra', 'vitamin']),
   e('eläintuotteet', 'Liha, kala ja kananmuna', 'low', [],
     ['liha', 'naudan', 'nauta', 'sian', 'sika', 'porsas', 'kana', 'broileri', 'kalkkuna', 'lammas', 'kollageeni', 'liivate', 'riista', 'poro', 'hirvi', 'kala', 'lohi', 'tonnikala', 'silakka', 'muikku', 'katkarapu', 'äyriäi', 'muna', 'kananmuna', 'pekoni', 'kinkku', 'meat', 'beef', 'pork', 'chicken', 'turkey', 'fish', 'salmon', 'tuna', 'shrimp', '^egg', 'kött', '=nöt', 'fläsk', 'kyckling', 'fisk', '=lax', 'ägg']),
 ];
